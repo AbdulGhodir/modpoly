@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ModPoly - Monopoly</title>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#fbfaf7">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="g"></div>
+
+<!-- Tombol Pengaturan & Pause di Atas Tengah Berjauhan -->
+<div id="top-actions">
+  <button class="btn" data-m="Pengaturan" title="Pengaturan">⚙️</button>
+  <button class="btn" data-m="Menu / Pause" title="Pause">⏸</button>
+</div>
+
+<!-- Area Tengah Papan -->
+<div id="center-ui">
+  <div id="bar">
+    <div class="t" id="bar-round">Putaran <b id="rd">1</b>/30</div>
+    <div class="sep">•</div>
+    <div class="t" id="bar-turn">Giliran: <b id="tn">Pemain 1</b></div>
+  </div>
+  <div id="logo">ModPoly</div>
+  <div id="dice" title="Klik untuk melempar dadu">
+    <div class="dies"><div class="die"></div><div class="die"></div></div>
+    <div id="roll">Klik dadu 🎲</div>
+  </div>
+</div>
+
+<div id="hud"></div>
+<div id="rotate-hint" role="status"><span>📱↻ Putar HP ke mode landscape agar papan lebih besar</span><button id="rotate-ok" type="button" aria-label="Tutup">✕</button></div>
+<div id="fs-gate"><div class="fs-card"><div class="fs-logo">ModPoly</div><p>Mainkan dalam layar penuh (landscape) agar papan lebih besar.</p><button id="fs-go" type="button">⛶ MAIN LAYAR PENUH</button><small id="fs-note"></small></div></div>
+<div id="toast"></div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
