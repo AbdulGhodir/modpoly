@@ -1,36 +1,21 @@
 import {TILES} from '../data/tiles.js';
 import {gameState} from './GameState.js';
 import {economyManager, TransactionType} from './EconomyManager.js';
+import {purchaseUnownedProperty} from './purchaseUnownedProperty.js';
+import {initializePropertyState} from './propertyState.js';
+import {calculatePropertyRent} from './rent.js';
+import {getMortgageEligibility, getUnmortgageEligibility, getBuildingSaleEligibility} from './mortgage.js';
 
 export class PropertyManager {
-  constructor() {
+  constructor(state = gameState, economy = economyManager) {
+    this.state = state;
+    this.economy = economy;
     this.initProperties();
   }
 
   // Menghubungkan dan memetakan data properti dari TILES (sumber CSV) ke dalam GameState
   initProperties() {
-    TILES.forEach(tile => {
-      if (['prop', 'rail', 'util'].includes(tile.type)) {
-        const prop = {
-          id: `prop_${tile.pos}`,
-          pos: tile.pos,
-          name: tile.nama,
-          type: tile.type,
-          group: tile.group || (tile.type === 'rail' ? 'rail' : 'util'),
-          price: Number(tile.harga_beli || tile.price || 0),
-          owner: null, // default: bank (belum dimiliki)
-          isMortgaged: false,
-          mortgageValue: Number(tile.hipotek || Math.floor((tile.harga_beli || tile.price || 0) / 2)),
-          houses: 0,
-          hasHotel: false,
-          housePrice: Number(tile.biaya_rumah || 0),
-          hotelPrice: Number(tile.biaya_hotel || 0),
-          icon: tile.icon || '',
-          rent: this._buildRentTable(tile)
-        };
-        gameState.properties.set(tile.pos, prop);
-      }
-    });
+    initializePropertyState(this.state, TILES);
   }
 
   _buildRentTable(tile) {
@@ -60,11 +45,11 @@ export class PropertyManager {
   }
 
   getProperty(pos) {
-    return gameState.properties.get(pos) || null;
+    return this.state.properties.get(pos) || null;
   }
 
   getAllProperties() {
-    return Array.from(gameState.properties.values());
+    return Array.from(this.state.properties.values());
   }
 
   getPlayerProperties(playerId) {
@@ -77,7 +62,7 @@ export class PropertyManager {
 
     // Hapus dari pemilik lama jika ada
     if (prop.owner !== null) {
-      const prevPlayer = gameState.getPlayerById(prop.owner);
+      const prevPlayer = this.state.getPlayerById(prop.owner);
       if (prevPlayer) {
         prevPlayer.properties = prevPlayer.properties.filter(id => id !== prop.id);
       }
@@ -86,7 +71,7 @@ export class PropertyManager {
     // Set pemilik baru
     prop.owner = playerId;
     if (playerId !== null) {
-      const newPlayer = gameState.getPlayerById(playerId);
+      const newPlayer = this.state.getPlayerById(playerId);
       if (newPlayer && !newPlayer.properties.includes(prop.id)) {
         newPlayer.properties.push(prop.id);
       }
@@ -98,6 +83,16 @@ export class PropertyManager {
       }));
     }
     return true;
+  }
+
+  purchaseProperty(pos, playerId) {
+    return purchaseUnownedProperty({
+      state: this.state,
+      economy: this.economy,
+      properties: this,
+      pos,
+      playerId
+    });
   }
 
   getColorGroupProperties(group) {
@@ -113,33 +108,7 @@ export class PropertyManager {
 
   calculateRent(pos, diceRoll = 7) {
     const prop = this.getProperty(pos);
-    if (!prop || !prop.owner || prop.isMortgaged) return 0;
-
-    if (prop.type === 'prop') {
-      if (prop.hasHotel) return prop.rent.hotel;
-      if (prop.houses === 4) return prop.rent.house4;
-      if (prop.houses === 3) return prop.rent.house3;
-      if (prop.houses === 2) return prop.rent.house2;
-      if (prop.houses === 1) return prop.rent.house1;
-
-      // Jika satu set warna dimiliki penuh (Monopoly), sewa tanah dasar dikali 2
-      const isMonopoly = this.isColorGroupMonopoly(prop.owner, prop.group);
-      return isMonopoly ? prop.rent.base * 2 : prop.rent.base;
-    }
-
-    if (prop.type === 'rail') {
-      const ownerRails = this.getAllProperties().filter(p => p.type === 'rail' && p.owner === prop.owner);
-      const count = Math.min(4, Math.max(1, ownerRails.length));
-      return prop.rent[`count${count}`] || 25;
-    }
-
-    if (prop.type === 'util') {
-      const ownerUtils = this.getAllProperties().filter(p => p.type === 'util' && p.owner === prop.owner);
-      const factor = ownerUtils.length >= 2 ? prop.rent.factor2 : prop.rent.factor1;
-      return diceRoll * factor;
-    }
-
-    return 0;
+    return calculatePropertyRent(prop, this.state.properties, diceRoll);
   }
 
   // ─── SISTEM PEMBANGUNAN RUMAH & HOTEL ──────────────────────────────────────
@@ -172,13 +141,13 @@ export class PropertyManager {
     }
 
     // Stok rumah Bank
-    if ((gameState.bankHouses ?? 32) <= 0) {
+    if ((this.state.bankHouses ?? 32) <= 0) {
       return { success: false, canBuild: false, reason: 'Persediaan rumah di Bank telah habis.' };
     }
 
     // Ketersediaan saldo pemain
     const cost = prop.housePrice || 50;
-    if (!economyManager.hasEnoughMoney(prop.owner, cost)) {
+    if (!this.economy.hasEnoughMoney(prop.owner, cost)) {
       return { success: false, canBuild: false, reason: `Saldo tidak cukup untuk membangun rumah ($${cost}).` };
     }
 
@@ -192,7 +161,7 @@ export class PropertyManager {
     const prop = check.prop;
     const cost = check.cost;
 
-    const paid = economyManager.deductMoney(
+    const paid = this.economy.deductMoney(
       prop.owner,
       cost,
       `Membangun 1 rumah di ${prop.name}: -$${cost}`,
@@ -204,8 +173,8 @@ export class PropertyManager {
     }
 
     prop.houses++;
-    if (typeof gameState.bankHouses === 'number') {
-      gameState.bankHouses--;
+    if (typeof this.state.bankHouses === 'number') {
+      this.state.bankHouses--;
     }
 
     if (typeof window !== 'undefined') {
@@ -241,12 +210,12 @@ export class PropertyManager {
     }
 
     // Stok hotel Bank
-    if ((gameState.bankHotels ?? 12) <= 0) {
+    if ((this.state.bankHotels ?? 12) <= 0) {
       return { success: false, canBuild: false, reason: 'Persediaan hotel di Bank telah habis.' };
     }
 
     const cost = prop.hotelPrice || prop.housePrice || 50;
-    if (!economyManager.hasEnoughMoney(prop.owner, cost)) {
+    if (!this.economy.hasEnoughMoney(prop.owner, cost)) {
       return { success: false, canBuild: false, reason: `Saldo tidak cukup untuk membangun hotel ($${cost}).` };
     }
 
@@ -260,7 +229,7 @@ export class PropertyManager {
     const prop = check.prop;
     const cost = check.cost;
 
-    const paid = economyManager.deductMoney(
+    const paid = this.economy.deductMoney(
       prop.owner,
       cost,
       `Membangun Hotel di ${prop.name}: -$${cost}`,
@@ -274,8 +243,8 @@ export class PropertyManager {
     // 4 rumah dikembalikan ke stok Bank, 1 hotel diambil
     prop.houses = 0;
     prop.hasHotel = true;
-    if (typeof gameState.bankHouses === 'number') gameState.bankHouses += 4;
-    if (typeof gameState.bankHotels === 'number') gameState.bankHotels--;
+    if (typeof this.state.bankHouses === 'number') this.state.bankHouses += 4;
+    if (typeof this.state.bankHotels === 'number') this.state.bankHotels--;
 
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('property:updated', { detail: { pos, property: prop } }));
@@ -287,19 +256,9 @@ export class PropertyManager {
 
   canSellHouse(pos) {
     const prop = this.getProperty(pos);
-    if (!prop) return { success: false, canSell: false, reason: 'Properti tidak ditemukan.' };
-    if (prop.houses <= 0) return { success: false, canSell: false, reason: 'Tidak ada rumah pada properti ini.' };
-    if (prop.hasHotel) return { success: false, canSell: false, reason: 'Properti memiliki Hotel, bukan rumah biasa. Silakan jual Hotel.' };
-
-    const groupProps = this.getColorGroupProperties(prop.group);
-    // Aturan penjualan merata: tidak boleh menjual rumah jika ada properti sekelompok yang punya rumah lebih banyak
-    const maxHouses = Math.max(...groupProps.map(p => p.hasHotel ? 5 : p.houses));
-    if (prop.houses < maxHouses) {
-      return { success: false, canSell: false, reason: 'Penjualan harus merata. Jual rumah dari properti yang lebih banyak terlebih dahulu.' };
-    }
-
-    const refund = Math.floor((prop.housePrice || 50) * 0.5);
-    return { success: true, canSell: true, refund, prop };
+    const eligibility = getBuildingSaleEligibility(prop, this.state.properties, this.state.bankHouses, 'SELL_HOUSE');
+    return eligibility.success ? {success: true, canSell: true, refund: eligibility.refund, prop}
+      : {success: false, canSell: false, reason: eligibility.reason};
   }
 
   sellHouse(pos) {
@@ -310,9 +269,9 @@ export class PropertyManager {
     const refund = check.refund;
 
     prop.houses--;
-    if (typeof gameState.bankHouses === 'number') gameState.bankHouses++;
+    if (typeof this.state.bankHouses === 'number') this.state.bankHouses++;
 
-    economyManager.addMoney(
+    this.economy.addMoney(
       prop.owner,
       refund,
       `Jual 1 rumah di ${prop.name}: +$${refund}`,
@@ -329,11 +288,9 @@ export class PropertyManager {
 
   canSellHotel(pos) {
     const prop = this.getProperty(pos);
-    if (!prop) return { success: false, canSell: false, reason: 'Properti tidak ditemukan.' };
-    if (!prop.hasHotel) return { success: false, canSell: false, reason: 'Properti tidak memiliki Hotel.' };
-
-    const refund = Math.floor((prop.hotelPrice || prop.housePrice || 50) * 0.5);
-    return { success: true, canSell: true, refund, prop };
+    const eligibility = getBuildingSaleEligibility(prop, this.state.properties, this.state.bankHouses, 'SELL_HOTEL');
+    return eligibility.success ? {success: true, canSell: true, refund: eligibility.refund, prop}
+      : {success: false, canSell: false, reason: eligibility.reason};
   }
 
   sellHotel(pos) {
@@ -344,17 +301,17 @@ export class PropertyManager {
     const refund = check.refund;
 
     prop.hasHotel = false;
-    if (typeof gameState.bankHotels === 'number') gameState.bankHotels++;
+    if (typeof this.state.bankHotels === 'number') this.state.bankHotels++;
 
     // Jika bank memiliki cukup rumah (>= 4), hotel diturunkan menjadi 4 rumah
-    if (typeof gameState.bankHouses === 'number' && gameState.bankHouses >= 4) {
+    if (typeof this.state.bankHouses === 'number' && this.state.bankHouses >= 4) {
       prop.houses = 4;
-      gameState.bankHouses -= 4;
+      this.state.bankHouses -= 4;
     } else {
       prop.houses = 0;
     }
 
-    economyManager.addMoney(
+    this.economy.addMoney(
       prop.owner,
       refund,
       `Jual Hotel di ${prop.name}: +$${refund}`,
@@ -389,26 +346,10 @@ export class PropertyManager {
 
   canMortgage(pos) {
     const prop = this.getProperty(pos);
-    if (!prop) return { success: false, canMortgage: false, reason: 'Properti tidak ditemukan.' };
-    if (!prop.owner) return { success: false, canMortgage: false, reason: 'Properti belum dimiliki.' };
-    if (prop.isMortgaged) return { success: false, canMortgage: false, reason: 'Properti sudah dalam status digadaikan.' };
-
-    // Tidak boleh ada bangunan pada properti ini
-    if (prop.houses > 0 || prop.hasHotel) {
-      return { success: false, canMortgage: false, reason: 'Seluruh bangunan pada properti ini harus dijual terlebih dahulu.' };
-    }
-
-    // Jika kota, tidak boleh ada bangunan pada SEMUA properti dalam satu kelompok warna
-    if (prop.type === 'prop') {
-      const groupProps = this.getColorGroupProperties(prop.group);
-      const hasAnyBuilding = groupProps.some(p => p.houses > 0 || p.hasHotel);
-      if (hasAnyBuilding) {
-        return { success: false, canMortgage: false, reason: 'Semua bangunan pada kelompok warna ini harus dijual terlebih dahulu sebelum menggadaikan.' };
-      }
-    }
-
-    const value = prop.mortgageValue || Math.floor((prop.price || 0) / 2);
-    return { success: true, canMortgage: true, value, prop };
+    const eligibility = getMortgageEligibility(prop, this.state.properties);
+    return eligibility.success
+      ? {success: true, canMortgage: true, value: eligibility.value, prop}
+      : {success: false, canMortgage: false, reason: eligibility.reason};
   }
 
   mortgageProperty(pos) {
@@ -420,7 +361,7 @@ export class PropertyManager {
 
     prop.isMortgaged = true;
 
-    economyManager.addMoney(
+    this.economy.addMoney(
       prop.owner,
       value,
       `Gadai ${prop.name}: +$${value}`,
@@ -437,23 +378,13 @@ export class PropertyManager {
 
   canUnmortgage(pos) {
     const prop = this.getProperty(pos);
-    if (!prop) return { success: false, canUnmortgage: false, reason: 'Properti tidak ditemukan.' };
-    if (!prop.owner) return { success: false, canUnmortgage: false, reason: 'Properti belum dimiliki.' };
-    if (!prop.isMortgaged) return { success: false, canUnmortgage: false, reason: 'Properti tidak sedang digadaikan.' };
-
-    const mortgageValue = prop.mortgageValue || Math.floor((prop.price || 0) / 2);
-    const interest = Math.round(mortgageValue * 0.10);
-    const totalCost = mortgageValue + interest;
-
-    if (!economyManager.hasEnoughMoney(prop.owner, totalCost)) {
-      return {
-        success: false,
-        canUnmortgage: false,
-        reason: `Saldo tidak mencukupi untuk menebus gadai ($${totalCost} = Pokok $${mortgageValue} + Bunga $${interest}).`
-      };
-    }
-
-    return { success: true, canUnmortgage: true, mortgageValue, interest, totalCost, prop };
+    const eligibility = getUnmortgageEligibility(prop, this.state.properties, this.economy.getBalance?.(prop?.owner) ??
+      this.state.getPlayerById(prop?.owner)?.money);
+    return eligibility.success
+      ? {success: true, canUnmortgage: true, mortgageValue: eligibility.principal, interest: eligibility.interest, totalCost: eligibility.totalCost, prop}
+      : {success: false, canUnmortgage: false, ...(Number.isFinite(eligibility.principal) ? {mortgageValue: eligibility.principal} : {}),
+        ...(Number.isFinite(eligibility.interest) ? {interest: eligibility.interest} : {}),
+        ...(Number.isFinite(eligibility.totalCost) ? {totalCost: eligibility.totalCost} : {}), reason: eligibility.reason};
   }
 
   unmortgageProperty(pos) {
@@ -463,7 +394,7 @@ export class PropertyManager {
     const prop = check.prop;
     const totalCost = check.totalCost;
 
-    const paid = economyManager.deductMoney(
+    const paid = this.economy.deductMoney(
       prop.owner,
       totalCost,
       `Tebus gadai ${prop.name}: -$${totalCost}`,

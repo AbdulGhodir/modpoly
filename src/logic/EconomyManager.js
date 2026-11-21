@@ -23,15 +23,17 @@ export const TransactionType = {
 let txCounter = 1;
 
 export class EconomyManager {
+  constructor(state = gameState) { this.state = state; }
+
   hasEnoughMoney(playerId, amount) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return false;
     return player.money >= amount;
   }
 
   addMoney(playerId, amount, reason = '', type = TransactionType.SALARY) {
     if (amount <= 0) return false;
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return false;
 
     player.money += amount;
@@ -54,7 +56,7 @@ export class EconomyManager {
 
   deductMoney(playerId, amount, reason = '', type = TransactionType.TRANSFER) {
     if (amount <= 0) return false;
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return false;
 
     // Larang saldo menjadi negatif tanpa mekanisme kebangkrutan khusus
@@ -83,8 +85,8 @@ export class EconomyManager {
 
   transferMoney(fromPlayerId, toPlayerId, amount, reason = '', type = TransactionType.RENT) {
     if (amount <= 0) return false;
-    const sender = gameState.getPlayerById(fromPlayerId);
-    const receiver = gameState.getPlayerById(toPlayerId);
+    const sender = this.state.getPlayerById(fromPlayerId);
+    const receiver = this.state.getPlayerById(toPlayerId);
     if (!sender || !receiver) return false;
 
     // Pastikan saldo pengirim cukup
@@ -121,12 +123,12 @@ export class EconomyManager {
       type,
       description
     };
-    gameState.transactions.push(tx);
+    this.state.transactions.push(tx);
     return tx;
   }
 
   getTransactions(limit = 20) {
-    return gameState.transactions.slice(-limit).reverse();
+    return this.state.transactions.slice(-limit).reverse();
   }
 }
 

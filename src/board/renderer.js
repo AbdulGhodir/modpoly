@@ -2,7 +2,9 @@ import {CFG,COL} from '../config.js';
 import {TILES} from '../data/tiles.js';
 import {GEO} from './geometry.js';
 import {propertyManager} from '../logic/PropertyManager.js';
-import {gameState} from '../logic/GameState.js';
+import {clientGameStore} from '../state/ClientGameStore.js';
+
+const TILE_RENDER_ORDER = [...TILES.keys()].sort((a,b)=>GEO[a].cx+GEO[a].cy-GEO[b].cx-GEO[b].cy);
 
 function sh(hex,f){
  const n=parseInt(hex.slice(1),16),c=[n>>16,n>>8&255,n&255].map(v=>Math.round(f<0?v*(1+f):v+(255-v)*f));
@@ -62,7 +64,7 @@ function drawRentBadge(X,w,h,rentVal,ownerColor,txtFn,isMortgaged=false,building
  txtFn(rentText,w/2,badgeY+badgeH/2+0.5,badgeW-4,fontSize,textColor,800);
 }
 
-export function renderBoard(X,qOverride){
+export function renderBoard(X,qOverride,store=clientGameStore,properties=propertyManager){
  const {A,B,OX,OY,L,D,Z0,TH}=CFG;
  const Q=qOverride||CFG.Q; // resolusi texture mengikuti ukuran tampil x DPR (lihat GameScene)
  const proj=(u,v,z)=>[(u-v)*A+OX,(u+v)*B+OY-z];
@@ -216,7 +218,7 @@ export function renderBoard(X,qOverride){
  X.strokeRect(D+6,D+6,L-2*D-12,L-2*D-12);
 
  // Render setiap petak (urut belakang → depan berdasarkan isometrik)
- [...TILES.keys()].sort((a,b)=>GEO[a].cx+GEO[a].cy-GEO[b].cx-GEO[b].cy).forEach(i=>{
+ TILE_RENDER_ORDER.forEach(i=>{
   const t=TILES[i],g=GEO[i],u0=g.cx-g.bw/2,v0=g.cy-g.bh/2,u1=u0+g.bw,v1=v0+g.bh,zt=Z0+TH;
   const base=t.type==='corner'?(t.color||'#8d99ae'):'#fbf9f4';
   poly([proj(u1,v0,zt),proj(u1,v1,zt),proj(u1,v1,Z0),proj(u1,v0,Z0)],sh(base,-.32));
@@ -240,10 +242,10 @@ export function renderBoard(X,qOverride){
    X.fillRect(0,0,w,h);
 
    try{
-    if(propertyManager?.getProperty){
-     prop=propertyManager.getProperty(t.pos);
-     if(prop?.owner && gameState?.getPlayerById){
-      bOwner=gameState.getPlayerById(prop.owner);
+    if(store?.getProperty){
+     prop=store.getProperty(t.pos);
+     if(prop?.owner && store?.getPlayer){
+      bOwner=store.getPlayer(prop.owner);
      }
     }
    }catch(e){}
@@ -275,7 +277,7 @@ export function renderBoard(X,qOverride){
 
     // Badge sewa jika sudah dibeli
     if(bOwner){
-     let rentVal=propertyManager.calculateRent(t.pos);
+     let rentVal=properties.calculateRent(t.pos);
      if(!rentVal && !prop?.isMortgaged) rentVal=prop?.rent?.base||t.price||0;
      drawRentBadge(X, w, h, rentVal, bOwner.color, txt, prop?.isMortgaged);
     }else{
@@ -299,7 +301,7 @@ export function renderBoard(X,qOverride){
     txt('🚆',w/2,h*.42,36,20);
     txt(t.nama.replace('Stasiun ',''),w/2,h*.68,w-4,10,'#1e293b',600);
     if(bOwner){
-     let rentVal=propertyManager.calculateRent(t.pos);
+     let rentVal=properties.calculateRent(t.pos);
      if(!rentVal && !prop?.isMortgaged) rentVal=prop?.rent?.count1||25;
      drawRentBadge(X, w, h, rentVal, bOwner.color, txt, prop?.isMortgaged);
     }else{
@@ -312,7 +314,7 @@ export function renderBoard(X,qOverride){
     txt(t.icon||'⚡',w/2,h*.44,36,20);
     txt(t.nama.includes('Listrik')?'PLN':'PDAM',w/2,h*.68,w-4,10.5,'#0369a1',700);
     if(bOwner){
-     let rentVal=propertyManager.calculateRent(t.pos);
+     let rentVal=properties.calculateRent(t.pos);
      if(!rentVal && !prop?.isMortgaged) rentVal=28;
      drawRentBadge(X, w, h, rentVal, bOwner.color, txt, prop?.isMortgaged);
     }else{

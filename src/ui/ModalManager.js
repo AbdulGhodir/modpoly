@@ -1,15 +1,74 @@
-import {gameState} from '../logic/GameState.js';
+import {clientGameStore} from '../state/ClientGameStore.js';
 import {propertyManager} from '../logic/PropertyManager.js';
 import {tradeModalManager} from './TradeModalManager.js';
 import {COL} from '../config.js';
 import {toast, buildHud} from './hud.js';
+import {createActionGuard} from '../logic/ActionGuard.js';
+import {socketClient} from '../network/SocketClient.js';
+import {canShowPlayerActionMenu} from './multiplayerTurnControls.js';
+
+const newBuildingActionId = () => globalThis.crypto?.randomUUID?.() || `building-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 export class ModalManager {
   constructor() {
     this.overlay = null;
     this.modal = null;
     this.activeTab = 'properties';
+    this.multiplayerContext = null;
+    this.multiplayerSessionObserved = false;
     this.initDOM();
+    clientGameStore.subscribe(({change}) => {
+      if (!['property-finance-resolved', 'building-resolved'].includes(change.type)) return;
+      buildHud();
+      if (this.isOpen()) this.renderCurrentTab();
+    });
+  }
+
+  setMultiplayerContext(context) { this.multiplayerContext = context; }
+
+  getPropertyOwnerId(player) {
+    const room = this.multiplayerContext?.getActiveRoom?.();
+    return room?.status === 'started' ? player.playerId : player.id;
+  }
+
+  getMortgageActionStatus(player) {
+    const room = this.multiplayerContext?.getActiveRoom?.();
+    if (room?.status === 'started') this.multiplayerSessionObserved = true;
+    if (room?.status !== 'started') return this.multiplayerSessionObserved
+      ? {online: true, allowed: false}
+      : {online: false, allowed: true};
+    if (!player) return {online: true, allowed: false};
+    const localPlayerId = this.multiplayerContext?.getLocalPlayerId?.();
+    const state = clientGameStore.getState();
+    return {online: true, allowed: localPlayerId === player.playerId &&
+      state.activePlayerId === player.playerId && ['WAITING_ROLL', 'PLAYER_ACTION'].includes(state.phase)};
+  }
+
+  getBuildingActionStatus(player) {
+    const room = this.multiplayerContext?.getActiveRoom?.();
+    if (room?.status !== 'started') return {online: false, allowed: true};
+    const state = clientGameStore.getState();
+    const allowed = player?.playerId === this.multiplayerContext?.getLocalPlayerId?.() &&
+      state.activePlayerId === player.playerId && state.gameStatus === 'IN_GAME' &&
+      ['WAITING_ROLL', 'PLAYER_ACTION'].includes(state.phase);
+    return {online: true, allowed};
+  }
+
+  async sendBuildingAction(action, propertyPos) {
+    const state = clientGameStore.getState();
+    const response = await socketClient.request('game:building-action', {
+      turnId: state.turnId, actionId: newBuildingActionId(), action, propertyPos
+    });
+    if (!response?.ok) {
+      toast(`⚠️ ${response?.error?.message || 'Aksi bangunan gagal.'}`);
+      return false;
+    }
+    toast(`🏗️ ${response.result.message}`);
+    return true;
+  }
+
+  createPropertyActionResolutionId() {
+    return globalThis.crypto?.randomUUID?.() || `property-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 
   initDOM() {
@@ -128,8 +187,14 @@ export class ModalManager {
 
   open() {
     this.initDOM();
-    const player = gameState.getActivePlayer();
+    const player = clientGameStore.getActivePlayer();
     if (!player || player.status === 'BANKRUPT') return;
+    const room = this.multiplayerContext?.getActiveRoom?.();
+    if (room?.status === 'started' && !canShowPlayerActionMenu({
+      state: clientGameStore.getState(), store: clientGameStore, room,
+      localPlayerId: this.multiplayerContext?.getLocalPlayerId?.(),
+      connected: socketClient.isConnected()
+    })) return;
 
     this.renderCurrentTab();
 
@@ -156,7 +221,7 @@ export class ModalManager {
   }
 
   renderCurrentTab() {
-    const player = gameState.getActivePlayer();
+    const player = clientGameStore.getActivePlayer();
     if (!player) return;
 
     // Update header info pemain aktif
@@ -169,7 +234,7 @@ export class ModalManager {
     if (nameEl) nameEl.textContent = `${player.name} (${player.cn})`;
     if (moneyEl) moneyEl.textContent = `$${player.money.toLocaleString('id-ID')}`;
 
-    const playerProps = propertyManager.getPlayerProperties(player.id);
+    const playerProps = propertyManager.getPlayerProperties(this.getPropertyOwnerId(player));
     if (propsEl) propsEl.textContent = `${playerProps.length} Properti`;
 
     if (this.activeTab === 'properties') {
@@ -255,7 +320,9 @@ export class ModalManager {
     const content = document.getElementById('modal-tab-content');
     if (!content) return;
 
-    const cities = propertyManager.getPlayerProperties(player.id).filter(p => p.type === 'prop');
+    const ownerId = this.getPropertyOwnerId(player);
+    const actionStatus = this.getBuildingActionStatus(player);
+    const cities = propertyManager.getPlayerProperties(ownerId).filter(p => p.type === 'prop');
 
     if (cities.length === 0) {
       content.innerHTML = `
@@ -271,8 +338,9 @@ export class ModalManager {
     content.innerHTML = `
       <div class="props-list-header">
         <h4>Bangun Rumah & Hotel</h4>
-        <span class="props-summary">Stok Bank: ${gameState.bankHouses ?? 32} Rumah • ${gameState.bankHotels ?? 12} Hotel</span>
+        <span class="props-summary">Stok Bank: ${clientGameStore.getState().bankHouses ?? 32} Rumah • ${clientGameStore.getState().bankHotels ?? 12} Hotel</span>
       </div>
+      ${!actionStatus.allowed ? '<small class="prop-status-note error">Aksi bangunan hanya tersedia bagi pemain aktif pada fase sebelum melempar dadu.</small>' : ''}
       <div class="props-grid">
         ${cities.map(p => {
           const colorBar = COL[p.group] || '#888';
@@ -310,12 +378,12 @@ export class ModalManager {
                 ${statusReason}
                 <div class="prop-action-row">
                   ${p.houses < 4 && !p.hasHotel ? `
-                    <button class="btn-prop-action build-house" ${chkHouse.canBuild ? '' : 'disabled'} data-pos="${p.pos}">
+                    <button class="btn-prop-action build-house" ${chkHouse.canBuild && actionStatus.allowed ? '' : 'disabled'} data-pos="${p.pos}">
                       🏠 Bangun Rumah ($${p.housePrice})
                     </button>
                   ` : ''}
                   ${p.houses === 4 && !p.hasHotel ? `
-                    <button class="btn-prop-action build-hotel" ${chkHotel.canBuild ? '' : 'disabled'} data-pos="${p.pos}">
+                    <button class="btn-prop-action build-hotel" ${chkHotel.canBuild && actionStatus.allowed ? '' : 'disabled'} data-pos="${p.pos}">
                       🏨 Bangun Hotel ($${p.hotelPrice})
                     </button>
                   ` : ''}
@@ -329,8 +397,11 @@ export class ModalManager {
 
     // Pasang handler tombol bangun
     content.querySelectorAll('.btn-prop-action.build-house').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = createActionGuard(async () => {
         const pos = Number(btn.getAttribute('data-pos'));
+        const status = this.getBuildingActionStatus(clientGameStore.getActivePlayer());
+        if (!status.allowed) { toast('Hanya pemain aktif sebelum melempar dadu yang dapat mengelola bangunan.'); return false; }
+        if (status.online) return this.sendBuildingAction('BUILD_HOUSE', pos);
         const res = propertyManager.buildHouse(pos);
         if (res.success) {
           toast(`🔨 ${res.message}`);
@@ -339,12 +410,15 @@ export class ModalManager {
         } else {
           toast(`⚠️ ${res.reason || res.message}`);
         }
-      };
+      });
     });
 
     content.querySelectorAll('.btn-prop-action.build-hotel').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = createActionGuard(async () => {
         const pos = Number(btn.getAttribute('data-pos'));
+        const status = this.getBuildingActionStatus(clientGameStore.getActivePlayer());
+        if (!status.allowed) { toast('Hanya pemain aktif sebelum melempar dadu yang dapat mengelola bangunan.'); return false; }
+        if (status.online) return this.sendBuildingAction('BUILD_HOTEL', pos);
         const res = propertyManager.buildHotel(pos);
         if (res.success) {
           toast(`🌟 ${res.message}`);
@@ -353,7 +427,7 @@ export class ModalManager {
         } else {
           toast(`⚠️ ${res.reason || res.message}`);
         }
-      };
+      });
     });
   }
 
@@ -362,7 +436,9 @@ export class ModalManager {
     const content = document.getElementById('modal-tab-content');
     if (!content) return;
 
-    const sellable = propertyManager.getPlayerProperties(player.id).filter(p => p.type === 'prop' && (p.houses > 0 || p.hasHotel));
+    const ownerId = this.getPropertyOwnerId(player);
+    const actionStatus = this.getBuildingActionStatus(player);
+    const sellable = propertyManager.getPlayerProperties(ownerId).filter(p => p.type === 'prop' && (p.houses > 0 || p.hasHotel));
 
     if (sellable.length === 0) {
       content.innerHTML = `
@@ -380,6 +456,7 @@ export class ModalManager {
         <h4>Jual Bangunan Kembali ke Bank</h4>
         <span class="props-summary">Nilai Pengembalian: 50% Biaya Bangun</span>
       </div>
+      ${!actionStatus.allowed ? '<small class="prop-status-note error">Aksi bangunan hanya tersedia bagi pemain aktif pada fase sebelum melempar dadu.</small>' : ''}
       <div class="props-grid">
         ${sellable.map(p => {
           const colorBar = COL[p.group] || '#888';
@@ -389,14 +466,14 @@ export class ModalManager {
           if (p.hasHotel) {
             const chk = propertyManager.canSellHotel(p.pos);
             sellBtn = `
-              <button class="btn-prop-action sell-action" ${chk.canSell ? '' : 'disabled'} data-pos="${p.pos}" data-type="hotel">
+              <button class="btn-prop-action sell-action" ${chk.canSell && actionStatus.allowed ? '' : 'disabled'} data-pos="${p.pos}" data-type="hotel">
                 Jual Hotel (+$${chk.refund})
               </button>
             `;
           } else {
             const chk = propertyManager.canSellHouse(p.pos);
             sellBtn = `
-              <button class="btn-prop-action sell-action" ${chk.canSell ? '' : 'disabled'} data-pos="${p.pos}" data-type="house">
+              <button class="btn-prop-action sell-action" ${chk.canSell && actionStatus.allowed ? '' : 'disabled'} data-pos="${p.pos}" data-type="house">
                 Jual 1 Rumah (+$${chk.refund})
               </button>
             `;
@@ -423,9 +500,12 @@ export class ModalManager {
     `;
 
     content.querySelectorAll('.btn-prop-action.sell-action').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = createActionGuard(async () => {
         const pos = Number(btn.getAttribute('data-pos'));
         const type = btn.getAttribute('data-type');
+        const status = this.getBuildingActionStatus(clientGameStore.getActivePlayer());
+        if (!status.allowed) { toast('Hanya pemain aktif sebelum melempar dadu yang dapat mengelola bangunan.'); return false; }
+        if (status.online) return this.sendBuildingAction(type === 'hotel' ? 'SELL_HOTEL' : 'SELL_HOUSE', pos);
         const res = type === 'hotel' ? propertyManager.sellHotel(pos) : propertyManager.sellHouse(pos);
         if (res.success) {
           toast(`💰 ${res.message}`);
@@ -434,7 +514,7 @@ export class ModalManager {
         } else {
           toast(`⚠️ ${res.reason || res.message}`);
         }
-      };
+      });
     });
   }
 
@@ -443,7 +523,8 @@ export class ModalManager {
     const content = document.getElementById('modal-tab-content');
     if (!content) return;
 
-    const props = propertyManager.getPlayerProperties(player.id);
+    const props = propertyManager.getPlayerProperties(this.getPropertyOwnerId(player));
+    const actionStatus = this.getMortgageActionStatus(player);
 
     if (props.length === 0) {
       content.innerHTML = `
@@ -477,9 +558,10 @@ export class ModalManager {
                 <div style="font-size:12px;color:#15803d;font-weight:600;">
                   Pinjaman: +$${p.mortgageValue}
                 </div>
+                ${!actionStatus.allowed ? '<small class="prop-status-note error">Hanya pemain aktif sebelum melempar dadu yang dapat mengelola gadai.</small>' : ''}
                 ${!chk.canMortgage && !p.isMortgaged ? `<small class="prop-status-note error">${chk.reason}</small>` : ''}
                 <div class="prop-action-row">
-                  <button class="btn-prop-action mortgage-action" ${chk.canMortgage ? '' : 'disabled'} data-pos="${p.pos}">
+                  <button class="btn-prop-action mortgage-action" ${chk.canMortgage && actionStatus.allowed ? '' : 'disabled'} data-pos="${p.pos}">
                     ${p.isMortgaged ? 'Sudah Digadaikan' : `Gadaikan (+$${p.mortgageValue})`}
                   </button>
                 </div>
@@ -491,8 +573,24 @@ export class ModalManager {
     `;
 
     content.querySelectorAll('.btn-prop-action.mortgage-action').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = createActionGuard(async () => {
         const pos = Number(btn.getAttribute('data-pos'));
+        const actionStatus = this.getMortgageActionStatus(clientGameStore.getActivePlayer());
+        if (!actionStatus.allowed) {
+          toast('Hanya pemain aktif sebelum melempar dadu yang dapat mengelola gadai.');
+          return false;
+        }
+        if (actionStatus.online) {
+          const response = await socketClient.request('game:property-mortgage', {
+            turnId: clientGameStore.getState().turnId, resolutionId: this.createPropertyActionResolutionId(), propertyPos: pos
+          });
+          if (!response.ok) {
+            toast(`⚠️ ${response.error?.message || 'Gadai properti gagal.'}`);
+            return false;
+          }
+          toast(`💵 ${response.result.message}`);
+          return true;
+        }
         const res = propertyManager.mortgageProperty(pos);
         if (res.success) {
           toast(`💵 ${res.message}`);
@@ -501,7 +599,7 @@ export class ModalManager {
         } else {
           toast(`⚠️ ${res.reason || res.message}`);
         }
-      };
+      });
     });
   }
 
@@ -510,7 +608,8 @@ export class ModalManager {
     const content = document.getElementById('modal-tab-content');
     if (!content) return;
 
-    const mortgaged = propertyManager.getMortgagedProperties(player.id);
+    const mortgaged = propertyManager.getMortgagedProperties(this.getPropertyOwnerId(player));
+    const actionStatus = this.getMortgageActionStatus(player);
 
     if (mortgaged.length === 0) {
       content.innerHTML = `
@@ -547,9 +646,10 @@ export class ModalManager {
                 <div style="font-size:12.5px;font-weight:700;color:#0369a1;">
                   Total Tebus: $${chk.totalCost}
                 </div>
+                ${!actionStatus.allowed ? '<small class="prop-status-note error">Hanya pemain aktif sebelum melempar dadu yang dapat mengelola gadai.</small>' : ''}
                 ${!chk.canUnmortgage ? `<small class="prop-status-note error">${chk.reason}</small>` : ''}
                 <div class="prop-action-row">
-                  <button class="btn-prop-action unmortgage-action" ${chk.canUnmortgage ? '' : 'disabled'} data-pos="${p.pos}">
+                  <button class="btn-prop-action unmortgage-action" ${chk.canUnmortgage && actionStatus.allowed ? '' : 'disabled'} data-pos="${p.pos}">
                     Tebus Gadai (-$${chk.totalCost})
                   </button>
                 </div>
@@ -561,8 +661,24 @@ export class ModalManager {
     `;
 
     content.querySelectorAll('.btn-prop-action.unmortgage-action').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = createActionGuard(async () => {
         const pos = Number(btn.getAttribute('data-pos'));
+        const actionStatus = this.getMortgageActionStatus(clientGameStore.getActivePlayer());
+        if (!actionStatus.allowed) {
+          toast('Hanya pemain aktif sebelum melempar dadu yang dapat mengelola gadai.');
+          return false;
+        }
+        if (actionStatus.online) {
+          const response = await socketClient.request('game:property-unmortgage', {
+            turnId: clientGameStore.getState().turnId, resolutionId: this.createPropertyActionResolutionId(), propertyPos: pos
+          });
+          if (!response.ok) {
+            toast(`⚠️ ${response.error?.message || 'Penebusan gadai gagal.'}`);
+            return false;
+          }
+          toast(`🔓 ${response.result.message}`);
+          return true;
+        }
         const res = propertyManager.unmortgageProperty(pos);
         if (res.success) {
           toast(`🔓 ${res.message}`);
@@ -571,7 +687,7 @@ export class ModalManager {
         } else {
           toast(`⚠️ ${res.reason || res.message}`);
         }
-      };
+      });
     });
   }
 }

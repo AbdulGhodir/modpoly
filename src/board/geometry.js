@@ -67,3 +67,12 @@ export function getTileOuterEdge(tileIdx, offsetDist=18){
  }
  return projPt(u,v,Z0+TH);
 }
+
+/** Four projected corners [[x,y]...] of a tile's top face, in board-world coordinates. */
+export function getTilePolygon(tileIdx){
+ const g=GEO[tileIdx],rot=g.rot*Math.PI/180,c=Math.cos(rot),s=Math.sin(rot);
+ return [[-1,-1],[1,-1],[1,1],[-1,1]].map(([sx,sy])=>{
+  const lx=sx*g.w/2,ly=sy*g.h/2;
+  return projPt(g.cx+lx*c-ly*s,g.cy+lx*s+ly*c,CFG.Z0+CFG.TH);
+ });
+}

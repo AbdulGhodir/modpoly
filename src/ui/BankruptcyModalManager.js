@@ -1,7 +1,7 @@
-import {gameState} from '../logic/GameState.js';
 import {bankruptcyManager} from '../logic/BankruptcyManager.js';
 import {propertyManager} from '../logic/PropertyManager.js';
 import {toast, buildHud} from './hud.js';
+import {createActionGuard} from '../logic/ActionGuard.js';
 
 export class BankruptcyModalManager {
   constructor() {
@@ -170,23 +170,23 @@ export class BankruptcyModalManager {
         // Handler Bayar Utang
         const btnPay = document.getElementById('btn-pay-debt');
         if (btnPay) {
-          btnPay.onclick = () => {
+          btnPay.onclick = createActionGuard(() => {
             this.close();
             resolve({ resolved: true, bankrupt: false });
-          };
+          });
         }
 
         // Handler Nyatakan Bangkrut
         const btnBankrupt = document.getElementById('btn-declare-bankruptcy');
         if (btnBankrupt) {
-          btnBankrupt.onclick = () => {
+          btnBankrupt.onclick = createActionGuard(() => {
             const confirmMsg = `Yakin ingin menyatakan BANGKRUT?\nSemua aset Anda akan diserahkan kepada ${creditorName} dan Anda keluar dari permainan.`;
-            if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) return;
+            if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) return false;
 
             bankruptcyManager.declareBankruptcy(debtor.id, creditor ? creditor.id : 'BANK', debtAmount);
             this.close();
             resolve({ resolved: false, bankrupt: true });
-          };
+          });
         }
       };
 

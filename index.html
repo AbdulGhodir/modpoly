@@ -8,15 +8,36 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#fbfaf7">
+<style>
+  html,body{width:100%;height:100%;margin:0;background:#fbfaf7}
+  body.app-loading>*:not(#boot-screen){visibility:hidden!important}
+  #boot-screen{position:fixed;inset:0;z-index:9999;display:grid;place-content:center;justify-items:center;gap:18px;padding:24px;background:radial-gradient(ellipse at 50% 35%,#fffdf7 0%,#f7ead5 58%,#e8c89f 100%);color:#4b2c17;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;transition:opacity .3s ease,visibility .3s ease}
+  #boot-screen .brand{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:clamp(36px,9vw,58px);font-weight:900;letter-spacing:-.04em;color:#c2410c;text-shadow:0 3px 0 #f7c77e,0 8px 18px #9a341233}
+  #boot-screen .caption{font-size:14px;font-weight:600;color:#795438}
+  #boot-screen .track{width:min(220px,58vw);height:8px;overflow:hidden;border-radius:99px;background:#e8d8c1;box-shadow:inset 0 1px 3px #6b442233}
+  #boot-screen .progress{width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#f59e0b,#ea580c);animation:boot-progress 1.25s ease-in-out infinite alternate}
+  @keyframes boot-progress{from{transform:translateX(-35%)}to{transform:translateX(175%)}}
+  body.app-ready #boot-screen{opacity:0;visibility:hidden;pointer-events:none}
+  @media(prefers-reduced-motion:reduce){#boot-screen .progress{animation:none;width:70%}#boot-screen{transition:none}}
+</style>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="in-lobby app-loading">
+<div id="boot-screen" role="status" aria-live="polite" aria-label="Memuat ModPoly">
+  <div class="brand">ModPoly</div>
+  <div class="track" aria-hidden="true"><div class="progress"></div></div>
+  <div class="caption">Menyiapkan papan permainan…</div>
+</div>
 <div id="g"></div>
 
-<!-- Tombol Pengaturan & Pause di Atas Tengah Berjauhan -->
+<!-- Menu Utama / Lobby Root Screen -->
+<div id="lobby-screen" class="lobby-screen"></div>
+
+<!-- Tombol lobby dan pengaturan -->
 <div id="top-actions">
+  <button class="btn" id="btn-lobby-home" title="Menu Utama" aria-label="Menu Utama">🏠</button>
+  <button class="btn" id="btn-multiplayer" title="Info Room" aria-label="Buka lobby multiplayer">🌐</button>
   <button class="btn" data-m="Pengaturan" title="Pengaturan">⚙️</button>
-  <button class="btn" data-m="Menu / Pause" title="Pause">⏸</button>
 </div>
 
 <!-- Area Tengah Papan -->
@@ -37,6 +58,6 @@
 <div id="rotate-hint" role="status"><span>📱↻ Putar HP ke mode landscape agar papan lebih besar</span><button id="rotate-ok" type="button" aria-label="Tutup">✕</button></div>
 <div id="fs-gate"><div class="fs-card"><div class="fs-logo">ModPoly</div><p>Mainkan dalam layar penuh (landscape) agar papan lebih besar.</p><button id="fs-go" type="button">⛶ MAIN LAYAR PENUH</button><small id="fs-note"></small></div></div>
 <div id="toast"></div>
-<script type="module" src="/src/main.js"></script>
+<script type="module" src="./src/main.js"></script>
 </body>
 </html>
