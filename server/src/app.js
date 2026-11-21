@@ -1,5 +1,6 @@
 import express from 'express';
 import {createServer} from 'node:http';
+import {randomUUID} from 'node:crypto';
 import {Server as SocketIOServer} from 'socket.io';
 import {serverConfig} from './config.js';
 import {RoomManager} from './RoomManager.js';
@@ -9,6 +10,17 @@ const MAX_PING_LENGTH = 200;
 const MAX_PLAYER_NAME_LENGTH = 24;
 const ROOM_EVENTS = new Set(['room:create', 'room:join', 'room:resume', 'room:ready', 'room:not-ready', 'room:get', 'room:leave', 'room:start']);
 const ROOM_CREATE_OR_JOIN_EVENTS = new Set(['room:create', 'room:join']);
+
+const INSTANCE_ID = randomUUID().slice(0, 8);
+const STARTED_AT = new Date().toISOString();
+
+// Di belakang reverse proxy (Enzonic/Cloudflare), socket.handshake.address adalah IP proxy, bukan IP pemain.
+// Tanpa ini, SEMUA pemain berbagi satu bucket rate-limit room:create/join.
+function clientAddress(socket) {
+  const headers = socket.handshake.headers || {};
+  const forwarded = String(headers['cf-connecting-ip'] || headers['x-forwarded-for'] || '').split(',')[0].trim();
+  return forwarded || socket.handshake.address || 'unknown';
+}
 
 const invalidPayload = message => ({ok: false, error: {code: 'INVALID_PAYLOAD', message}});
 const eventFailure = (code, message) => ({ok: false, error: {code, message}});
@@ -30,12 +42,18 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
   const app = express();
   app.disable('x-powered-by');
   app.get('/health', (_request, response) => {
-    response.json({status: 'ok', service: 'monopoly-socket-server', timestamp: new Date().toISOString()});
+    // instanceId berubah tiap proses start. Kalau dipanggil berkali-kali hasilnya berganti-ganti,
+    // berarti ada lebih dari 1 instance di belakang load balancer (rooms tersimpan di memori tiap instance).
+    response.json({status: 'ok', service: 'monopoly-socket-server', instanceId: INSTANCE_ID,
+      startedAt: STARTED_AT, rooms: roomManager.rooms?.size ?? null, timestamp: new Date().toISOString()});
   });
 
   const httpServer = createServer(app);
   const io = new SocketIOServer(httpServer, {
     maxHttpBufferSize: maxSocketMessageBytes,
+    // Default 25s/20s terlalu ketat di belakang proxy & tab browser/HP yang di-throttle -> "ping timeout".
+    pingInterval: 20000,
+    pingTimeout: 60000,
     allowRequest: (request, callback) => {
       const origin = request.headers.origin;
       callback(null, !origin || allowedOrigins.includes(origin));
@@ -129,9 +147,9 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
   };
 
   io.on('connection', socket => {
-    console.info(`[socket] connected ${socket.id}`);
+    console.info(`[socket] connected ${socket.id} instance=${INSTANCE_ID} transport=${socket.conn.transport.name}`);
     const socketLimiter = new RateLimiter({maxKeys: 8});
-    const remoteAddress = socket.handshake.address || 'unknown';
+    const remoteAddress = clientAddress(socket);
 
     const checkRateLimit = eventName => {
       const category = ROOM_EVENTS.has(eventName) ? 'room' : 'gameplay';
@@ -518,7 +536,7 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
     });
 
     socket.on('disconnect', reason => {
-      console.info(`[socket] disconnected ${socket.id}: ${reason}`);
+      console.info(`[socket] disconnected ${socket.id} instance=${INSTANCE_ID}: ${reason}`);
       socketLimiter.buckets.clear();
       const result = roomManager.handleDisconnect(socket.id);
       if (result.ok && result.room) io.to(result.room.roomCode).emit('room:updated', result.room);

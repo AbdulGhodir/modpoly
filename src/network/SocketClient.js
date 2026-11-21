@@ -53,7 +53,12 @@ export class SocketClient {
     this._setStatus('connecting');
     this.socket = this.socketFactory(this.url, {
       autoConnect: false,
-      reconnection: true
+      // WebSocket langsung: polling HTTP butuh sticky session dan sering putus di balik proxy/load balancer.
+      transports: ['websocket'],
+      reconnection: true,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
     });
 
     for (const [eventName, listeners] of this.eventListeners) {
