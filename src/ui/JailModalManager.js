@@ -1,6 +1,7 @@
 import {jailManager, BAIL_COST, MAX_JAIL_TURNS} from '../logic/JailManager.js';
 import {economyManager} from '../logic/EconomyManager.js';
 import {toast, buildHud} from './hud.js';
+import {createActionGuard} from '../logic/ActionGuard.js';
 
 export class JailModalManager {
   constructor() {
@@ -26,15 +27,17 @@ export class JailModalManager {
     return this.overlay && !this.overlay.classList.contains('hidden');
   }
 
-  promptJailAction(player) {
+  promptJailAction(player, options = {}) {
     return new Promise((resolve) => {
       this.initDOM();
       if (!this.overlay) return resolve({ action: 'TRY_DOUBLE' });
 
       const attemptsUsed = player.jailTurns || 0;
       const attemptsLeft = Math.max(0, MAX_JAIL_TURNS - attemptsUsed);
-      const hasMoney = economyManager.hasEnoughMoney(player.id, BAIL_COST);
-      const hasCard = jailManager.hasGetOutOfJailCard(player.id);
+      const multiplayer = typeof options.onAction === 'function';
+      const canAct = !multiplayer || options.canAct === true;
+      const hasMoney = multiplayer ? player.money >= BAIL_COST : economyManager.hasEnoughMoney(player.id, BAIL_COST);
+      const hasCard = multiplayer ? (player.hasGetOutOfJailCard || 0) > 0 : jailManager.hasGetOutOfJailCard(player.id);
 
       this.overlay.innerHTML = `
         <div class="tile-modal-card jail-card">
@@ -49,6 +52,7 @@ export class JailModalManager {
               <span class="jail-chip-dot"></span>
               <span class="jail-chip-name">${player.name}</span>
             </div>
+            ${multiplayer && !canAct ? '<button class="jail-readonly-close" type="button" aria-label="Tutup">×</button>' : ''}
           </div>
 
           <div class="tile-modal-body jail-modal-body">
@@ -85,7 +89,7 @@ export class JailModalManager {
             <!-- Daftar Tindakan -->
             <div class="jail-actions-list">
               <!-- Opsi 1: Bayar Denda $50 -->
-              <button id="btn-jail-bail" class="btn-jail-action bail ${hasMoney ? '' : 'disabled'}" ${hasMoney ? '' : 'disabled'} type="button">
+              <button id="btn-jail-bail" class="btn-jail-action bail ${hasMoney && canAct ? '' : 'disabled'}" ${hasMoney && canAct ? '' : 'disabled'} type="button">
                 <div class="jail-btn-icon-wrap">💵</div>
                 <div class="jail-btn-content">
                   <div class="jail-btn-title">Bayar Denda $${BAIL_COST}</div>
@@ -95,7 +99,7 @@ export class JailModalManager {
               </button>
 
               <!-- Opsi 2: Coba Lempar Double -->
-              <button id="btn-jail-double" class="btn-jail-action double" type="button">
+              <button id="btn-jail-double" class="btn-jail-action double ${canAct ? '' : 'disabled'}" ${canAct ? '' : 'disabled'} type="button">
                 <div class="jail-btn-icon-wrap">🎲</div>
                 <div class="jail-btn-content">
                   <div class="jail-btn-title">Coba Lempar Double</div>
@@ -106,7 +110,7 @@ export class JailModalManager {
 
               <!-- Opsi 3: Kartu Bebas Penjara -->
               ${hasCard ? `
-                <button id="btn-jail-card" class="btn-jail-action card" type="button">
+                <button id="btn-jail-card" class="btn-jail-action card ${canAct ? '' : 'disabled'}" ${canAct ? '' : 'disabled'} type="button">
                   <div class="jail-btn-icon-wrap">🎟️</div>
                   <div class="jail-btn-content">
                     <div class="jail-btn-title">Gunakan Kartu Bebas Penjara</div>
@@ -130,29 +134,33 @@ export class JailModalManager {
       // Handler Tombol Bayar Denda
       const btnBail = document.getElementById('btn-jail-bail');
       if (btnBail) {
-        btnBail.onclick = () => {
+        btnBail.onclick = createActionGuard(() => {
+          if (multiplayer) return options.onAction('PAY_BAIL');
           this.close();
           resolve({ action: 'PAY_BAIL' });
-        };
+        });
       }
 
       // Handler Tombol Coba Double
       const btnDouble = document.getElementById('btn-jail-double');
       if (btnDouble) {
-        btnDouble.onclick = () => {
+        btnDouble.onclick = createActionGuard(() => {
+          if (multiplayer) return options.onAction('TRY_DOUBLE');
           this.close();
           resolve({ action: 'TRY_DOUBLE' });
-        };
+        });
       }
 
       // Handler Tombol Kartu Bebas Penjara
       const btnCard = document.getElementById('btn-jail-card');
       if (btnCard) {
-        btnCard.onclick = () => {
+        btnCard.onclick = createActionGuard(() => {
+          if (multiplayer) return options.onAction('USE_CARD');
           this.close();
           resolve({ action: 'USE_CARD' });
-        };
+        });
       }
+      this.overlay.querySelector('.jail-readonly-close')?.addEventListener('click', () => this.close());
     });
   }
 

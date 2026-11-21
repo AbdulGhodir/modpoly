@@ -1,9 +1,12 @@
 import Phaser from 'phaser';
 import {getPawnCoord} from '../board/geometry.js';
-export function makeToken(scene,p,idx){
- const [x,y]=getPawnCoord(p.pos,idx,4);
+export function makeToken(scene,p,idx,totalOnTile=1){
+ const [x,y]=getPawnCoord(p.pos,idx,totalOnTile);
  const hx=s=>Phaser.Display.Color.HexStringToColor(s).color;
  const c=scene.add.container(x,y);
+ c.playerId=p.playerId;
+ c.isPlayerToken=true;
+ const motionResolvers=new Set();
  const sd=scene.add.graphics();
  const jumpGroup=scene.add.container(0,0);
  const b=scene.add.graphics();
@@ -16,22 +19,39 @@ export function makeToken(scene,p,idx){
  c.setDepth(y+10);
  scene.tweens.add({targets:b,y:-4,duration:700+idx*90,yoyo:true,repeat:-1,ease:'Sine.easeInOut',delay:idx*120});
 
+ c.cancelMotion=function(){
+  scene.tweens.killTweensOf(c);
+  scene.tweens.killTweensOf(jumpGroup);
+  scene.tweens.killTweensOf(sd);
+  [...motionResolvers].forEach(resolve=>resolve());
+  motionResolvers.clear();
+  jumpGroup.y=0;
+  sd.setScale(1);
+  sd.setAlpha(.3);
+ };
+
  c.slideTo=function(tx,ty,duration=220){
   c.setDepth(ty+10);
   return new Promise(resolve=>{
+   let finished=false;
+   const finish=()=>{if(finished)return;finished=true;motionResolvers.delete(finish);resolve();};
+   motionResolvers.add(finish);
    scene.tweens.add({
     targets:c,
     x:tx,
     y:ty,
     duration,
     ease:'Quad.easeOut',
-    onComplete:resolve
+    onComplete:finish
    });
   });
  };
 
  c.hopTo=function(targetTileIdx,slotIndex=0,totalOnTile=1,duration=130){
   return new Promise(resolve=>{
+   let finished=false;
+   const finish=()=>{if(finished)return;finished=true;motionResolvers.delete(finish);jumpGroup.y=0;resolve();};
+   motionResolvers.add(finish);
    const [tx,ty]=getPawnCoord(targetTileIdx,slotIndex,totalOnTile);
    const halfDur = Math.round(duration / 2);
    c.setDepth(ty+10);
@@ -48,10 +68,7 @@ export function makeToken(scene,p,idx){
     duration:halfDur,
     ease:'Quad.easeOut',
     yoyo:true,
-    onComplete:()=>{
-     jumpGroup.y=0;
-     resolve();
-    }
+    onComplete:finish
    });
    scene.tweens.add({
     targets:sd,

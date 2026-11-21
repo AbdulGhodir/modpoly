@@ -3,7 +3,10 @@ import {economyManager, TransactionType} from './EconomyManager.js';
 import {propertyManager} from './PropertyManager.js';
 
 export class AuctionManager {
-  constructor() {
+  constructor(state = gameState, economy = economyManager, properties = propertyManager) {
+    this.state = state;
+    this.economy = economy;
+    this.properties = properties;
     this.isActive = false;
     this.property = null;
     this.highestBid = 0;
@@ -23,7 +26,7 @@ export class AuctionManager {
     this.highestBidder = null;
 
     // Semua pemain yang tidak bangkrut berhak mengikuti lelang (termasuk IN_JAIL)
-    this.activeBidderIds = gameState.players
+    this.activeBidderIds = this.state.players
       .filter(p => p.status !== PlayerStatus.BANKRUPT)
       .map(p => p.id);
 
@@ -39,14 +42,14 @@ export class AuctionManager {
   }
 
   getAuctionState() {
-    const totalEligible = gameState.players.filter(p => p.status !== PlayerStatus.BANKRUPT).length;
+    const totalEligible = this.state.players.filter(p => p.status !== PlayerStatus.BANKRUPT).length;
     return {
       isActive: this.isActive,
       property: this.property,
       highestBid: this.highestBid,
       highestBidder: this.highestBidder,
       currentBidder: this.getCurrentBidder(),
-      activeBidders: this.activeBidderIds.map(id => gameState.getPlayerById(id)).filter(Boolean),
+      activeBidders: this.activeBidderIds.map(id => this.state.getPlayerById(id)).filter(Boolean),
       totalActiveBidders: this.activeBidderIds.length,
       passedCount: totalEligible - this.activeBidderIds.length
     };
@@ -55,13 +58,14 @@ export class AuctionManager {
   getCurrentBidder() {
     if (!this.isActive || this.activeBidderIds.length === 0) return null;
     const currentId = this.activeBidderIds[this.currentPointer % this.activeBidderIds.length];
-    return gameState.getPlayerById(currentId);
+    return this.state.getPlayerById(currentId);
   }
 
-  placeBid(amount) {
+  placeBid(amount, bidderId = null) {
     if (!this.isActive) return false;
     const currentBidder = this.getCurrentBidder();
     if (!currentBidder) return false;
+    if (bidderId !== null && currentBidder.id !== bidderId) return false;
 
     const targetBid = Math.floor(Number(amount));
     
@@ -99,10 +103,11 @@ export class AuctionManager {
     return true;
   }
 
-  pass() {
+  pass(bidderId = null) {
     if (!this.isActive) return false;
     const currentBidder = this.getCurrentBidder();
     if (!currentBidder) return false;
+    if (bidderId !== null && currentBidder.id !== bidderId) return false;
 
     const currentIndex = this.currentPointer % this.activeBidderIds.length;
     // Hapus penawar ini dari daftar penawar aktif
@@ -154,7 +159,7 @@ export class AuctionManager {
       const finalPrice = this.highestBid;
 
       // Potong saldo pemenang lelang
-      const paid = economyManager.deductMoney(
+      const paid = this.economy.deductMoney(
         winner.id,
         finalPrice,
         `Menang lelang ${this.property.name} seharga $${finalPrice}`,
@@ -171,7 +176,7 @@ export class AuctionManager {
         };
       } else {
         // Ubah kepemilikan properti ke pemenang
-        propertyManager.setOwner(this.property.pos, winner.id);
+        this.properties.setOwner(this.property.pos, winner.id);
 
         result = {
           hasWinner: true,

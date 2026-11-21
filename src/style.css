@@ -101,8 +101,9 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
   left:50%;
   transform:translateX(-50%);
   display:flex;
-  justify-content:space-between;
-  width:clamp(260px, 32vw, 420px);
+  justify-content:center;
+  gap:12px;
+  width:auto;
   z-index:25;
   pointer-events:auto;
 }
@@ -1040,6 +1041,25 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
   font-size:12px;
   color:#786049;
 }
+.auction-bid-controls{
+  display:grid;
+  grid-template-columns:1fr auto auto;
+  align-items:center;
+  gap:8px;
+  margin-top:10px;
+}
+.auction-bid-controls label{grid-column:1 / -1;font-weight:700;color:#786049}
+.auction-bid-controls input{min-width:0;width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit}
+.auction-player-chip{display:inline-block;padding:4px 8px;margin:2px;border-radius:99px;background:#f1f5f9;font-size:12px}
+.auction-player-chip.active{background:#dcfce7;color:#166534;font-weight:700}
+.auction-player-chip.passed{background:#fee2e2;color:#b91c1c;font-weight:700;opacity:1}
+.chance-effect-badge.auction-waiting-turn{display:block;width:100%;box-sizing:border-box;text-align:center}
+.auction-controls{display:grid;gap:8px;margin-top:4px}
+.auction-controls .auction-custom-bid{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:8px;margin:0}
+.auction-controls .auction-custom-bid label{grid-column:1 / -1;font-size:12px;font-weight:700;color:#786049}
+.auction-controls .auction-custom-bid input{min-width:0;min-height:38px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:8px;font:inherit}
+.auction-controls .auction-custom-bid button{min-height:38px;padding:8px 12px;white-space:nowrap}
+.auction-controls .btn-pass-action{min-height:38px}
 
 /* Selesai Lelang */
 .finish-icon{
@@ -1639,7 +1659,10 @@ html,body{width:100%;height:100%;overflow:hidden;background:var(--bg);font-famil
   display:grid;grid-template-columns:1fr 1fr;gap:12px;
 }
 .trade-modal-footer{
-  display:flex;gap:10px;margin-top:14px;
+  display:flex;gap:10px;margin-top:14px;padding:0 24px 22px;box-sizing:border-box;
+}
+.trade-modal-footer > button{
+  flex:1;min-width:0;width:auto;padding:9px 14px;font-size:13px;
 }
 .trade-col{
   background:#f8fafc;border-radius:12px;padding:12px;
@@ -2460,6 +2483,17 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:foc
     font-size:8px;
     margin-top:2px;
   }
+  .auction-bid-controls{grid-template-columns:1fr 1fr;gap:4px;margin-top:5px}
+  .auction-bid-controls label{font-size:9px}
+  .auction-bid-controls input{padding:4px 6px;font-size:10px;min-height:28px;box-sizing:border-box}
+  .auction-bid-controls button{padding:4px 6px;font-size:9px;min-height:28px}
+  .auction-player-chip{font-size:8px;padding:2px 5px}
+  .auction-controls{gap:4px;margin-top:2px}
+  .auction-controls .auction-custom-bid{grid-template-columns:minmax(0,1fr) auto;gap:4px;margin:0 !important}
+  .auction-controls .auction-custom-bid label{font-size:9px}
+  .auction-controls .auction-custom-bid input{min-height:30px;padding:4px 6px;font-size:10px;box-sizing:border-box}
+  .auction-controls .auction-custom-bid button{min-height:30px;padding:4px 7px;font-size:9px}
+  .auction-controls .btn-pass-action{min-height:28px}
   .auction-card.finish .finish-icon{
     font-size:24px;
     margin:0 auto 2px;
@@ -2713,10 +2747,10 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:foc
   .dice-total{font-size:14px}
   .dice-double{font-size:7.5px}
   .btn-end-turn{
-    font-size:8px;
-    padding:1.5px 6px;
-    min-height:22px;
-    min-width:66px;
+    font-size:7.5px;
+    padding:0 5px;
+    min-height:19px;
+    min-width:62px;
   }
 
   /* Modal Landscape: Memanfaatkan Ruang Horizontal, Batas Tinggi Ketat */
@@ -2738,13 +2772,42 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:foc
 
   /* Modal Lelang di Landscape: Tetap compact dan proporsional */
   .tile-modal-card.auction-card{
-    width:min(88vw, 340px) !important;
-    max-width:340px !important;
-    max-height:min(90dvh, 310px) !important;
+    width:min(88vw, 540px) !important;
+    max-width:540px !important;
+    max-height:min(90dvh, 390px) !important;
   }
   .auction-card .tile-modal-body{
-    padding:6px 10px 8px !important;
-    gap:3px !important;
+    padding:8px 14px 10px !important;
+    gap:5px !important;
+  }
+  .auction-card .tile-prop-title{font-size:16px}
+  .auction-card .tile-details-box{padding:6px 10px;gap:4px}
+  .auction-card .modal-detail-row,.auction-card .auction-participants-info{font-size:10px}
+  .auction-card .auction-player-chip{font-size:9px;padding:2px 6px}
+  .auction-card .auction-controls{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px}
+  .auction-card .auction-bid-buttons{grid-column:1 / -1;display:flex;flex-wrap:wrap;gap:5px}
+  .auction-card .auction-bid-buttons button{flex:1;min-width:90px}
+  .auction-card .auction-custom-bid{grid-column:1 / -1}
+  .auction-card .btn-pass-action{grid-column:1 / -1}
+  .auction-card .auction-waiting-turn{font-size:10px;padding:4px 8px}
+
+  .trade-modal-card{
+    width:min(92vw,680px);
+    max-width:680px;
+    max-height:88dvh;
+  }
+  .trade-modal-card .tile-modal-body{padding:10px 16px;gap:7px}
+  .trade-modal-card .tile-prop-title{font-size:17px}
+  .trade-modal-card .trade-review-box{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0}
+  .trade-modal-card .review-item-group{padding:8px}
+  .trade-modal-card .review-item-group li,.trade-modal-card .review-item-group .group-title{font-size:10px}
+  .trade-modal-card .trade-modal-footer{padding:0 16px 12px;margin-top:2px}
+  .trade-modal-card .trade-modal-footer button{min-height:28px;padding:4px 10px;font-size:10px}
+
+  .tile-modal-card.chance-card{
+    width:min(84vw,420px) !important;
+    max-width:420px !important;
+    max-height:min(86dvh,300px) !important;
   }
 
   /* Barter di Landscape: 2 Kolom Berdampingan (Tanpa Tab) */
@@ -2760,9 +2823,9 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:foc
 
   /* Kartu Kesempatan di Landscape: Tetap berbentuk kartu elegan terpusat, bukan banner raksasa */
   .tile-modal-card.chance-card{
-    width:min(84vw, 300px) !important;
-    max-width:300px !important;
-    max-height:min(86dvh, 260px) !important;
+    width:min(84vw, 420px) !important;
+    max-width:420px !important;
+    max-height:min(86dvh, 300px) !important;
   }
   .chance-card .chance-modal-body,
   .chance-card .tile-modal-body{
@@ -2770,21 +2833,29 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:foc
     flex-direction:column !important;
     align-items:center !important;
     text-align:center !important;
-    padding:7px 12px 10px !important;
-    gap:3px !important;
+    padding:8px 16px 10px !important;
+    gap:4px !important;
   }
   .chance-card-icon{
-    font-size:24px;
-    width:36px;
-    height:36px;
+    font-size:22px;
+    width:34px;
+    height:34px;
     margin:0 auto 1px;
   }
-  .chance-card-title{font-size:12.5px;margin:0}
-  .chance-card-desc{font-size:9.5px;margin:0 0 3px}
+  .chance-card-title{font-size:13px;margin:0}
+  .chance-card-desc{font-size:10px;margin:0 0 3px}
   .chance-effect-badge{padding:2px 8px;font-size:9px}
   .chance-card .chance-actions,
   .chance-card .tile-modal-actions{margin-top:4px !important;display:flex !important;justify-content:center !important}
-  .chance-card .btn-primary-action{min-height:30px;font-size:9.5px;max-width:230px}
+  .chance-card .btn-primary-action{min-height:28px;font-size:9.5px;max-width:230px}
+
+  .jail-card{width:min(84vw,500px);max-width:500px;max-height:86dvh;border-radius:14px}
+  .jail-modal-header{padding:7px 12px;gap:8px}
+  .jail-modal-header-icon{width:30px;height:30px;font-size:15px}
+  .jail-card .jail-modal-body{padding:9px 13px;gap:6px;font-size:10px}
+  .jail-card h2,.jail-card h3{font-size:16px}
+  .jail-card p,.jail-card label,.jail-card .jail-info{font-size:10px;line-height:1.3}
+  .jail-card .btn-jail-action{min-height:28px;padding:4px 9px;font-size:10px}
 
   /* Parkir Bebas di Landscape: 2 Kolom */
   .freeparking-card .tile-modal-body{
@@ -2792,7 +2863,17 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:foc
     grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);
     align-items:start;
     gap:6px;
+    padding:8px 12px;
+    font-size:10px;
   }
+  .freeparking-card{width:min(90vw,600px);max-width:600px;max-height:88dvh}
+  .freeparking-card .tile-prop-title{font-size:15px}
+  .freeparking-card .travel-preview-box{padding:6px 8px;margin:3px 0}
+  .freeparking-card .preview-name{font-size:12px}
+  .freeparking-card .preview-lbl,.freeparking-card .tile-picker-label{font-size:9px}
+  .freeparking-card .btn-tile-choice{padding:4px 6px;font-size:9px}
+  .freeparking-card .choice-title{font-size:9px}
+  .freeparking-card .tile-modal-actions button{min-height:27px;padding:4px 8px;font-size:9.5px}
   .freeparking-card .tile-picker-container{grid-column:2;grid-row:1 / span 4;min-height:0}
   .freeparking-card .tile-picker-grid{max-height:34dvh;grid-template-columns:repeat(3,minmax(0,1fr))}
   .freeparking-card .tile-modal-actions{grid-column:1;flex-direction:column}
@@ -2800,3 +2881,1029 @@ button:focus:not(:focus-visible),a:focus:not(:focus-visible),[role="button"]:foc
   /* Tombol Aksi Bawah Landscape */
   .tile-modal-actions{flex-direction:row}
 }
+
+/* Private room lobby */
+.room-session-notice{position:fixed;top:max(10px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);z-index:400;max-width:min(92vw,460px);padding:9px 14px;border:1px solid #fdba74;border-radius:999px;background:#fff7ed;color:#9a3412;box-shadow:0 4px 16px #5a2b1626;font:650 12px var(--font-sans);text-align:center;pointer-events:none}
+.room-session-notice.hidden{display:none}
+.room-lobby-card{width:min(92vw,520px);max-height:min(88vh,760px);z-index:1}
+.room-lobby-body{gap:12px;overflow-y:auto}
+.room-connection{display:flex;align-items:center;gap:8px;padding:9px 11px;border-radius:10px;background:#f3f4f6;color:#475569;font-size:12px;font-weight:650}
+.room-connection i{width:9px;height:9px;flex:none;border-radius:50%;background:#94a3b8}
+.room-connection.online{background:#f0fdf4;color:#166534}
+.room-connection.online i{background:#22c55e;box-shadow:0 0 0 3px #bbf7d0}
+.room-connection.connecting i{background:#f59e0b;animation:pulseGiliran 1s infinite}
+.room-connection.offline{background:#fff7ed;color:#9a3412}
+.room-connection.offline i{background:#f97316}
+.room-connection button{width:auto;margin-left:auto;padding:6px 12px;font-size:12px}
+.room-error,.room-started-note{padding:10px 12px;border-radius:10px;background:#fff1f2;color:#be123c;font-size:13px;line-height:1.4}
+.room-started-note{background:#f0fdf4;color:#166534}
+.room-field{display:flex;flex-direction:column;gap:6px;color:#5a4029;font-size:13px;font-weight:700}
+.room-field input{width:100%;min-height:42px;padding:9px 12px;border:1.5px solid #e7d9c5;border-radius:10px;background:#fff;color:#2e1a0c;font:600 15px var(--font-sans);user-select:text}
+.room-field input:focus{outline:2px solid #fdba74;border-color:#f97316}
+.room-divider{display:flex;align-items:center;gap:10px;color:#9a8170;font-size:12px}
+.room-divider::before,.room-divider::after{content:"";height:1px;flex:1;background:#eadfce}
+.room-help{color:#766450;font-size:12px;line-height:1.45;text-align:center}
+.room-code-display{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;border:1.5px dashed #fdba74;border-radius:12px;background:#fff7ed}
+.room-code-display small{color:#9a3412;font-size:10px;font-weight:800;letter-spacing:.08em}
+.room-code-display strong{color:#9a3412;font:700 23px var(--font-fredoka);letter-spacing:.12em}
+.room-code-display button{width:auto;padding:7px 12px;font-size:12px}
+.room-roster-heading{display:flex;justify-content:space-between;align-items:center;color:#3f2a18;font:700 18px var(--font-fredoka)}
+.room-roster-heading span{color:#8a7562;font:600 12px var(--font-sans)}
+.room-roster{display:flex;flex-direction:column;gap:7px;list-style:none}
+.room-player-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border:1px solid #eee2d1;border-radius:11px;background:#fff}
+.room-player-row.self{border-color:#fdba74;background:#fffaf3}
+.room-player-name{display:flex;align-items:center;gap:7px;min-width:0;color:#3f2a18;font-weight:700}
+.room-player-name small{color:#8a7562;font-size:11px;font-weight:500}
+.room-host-tag{padding:2px 6px;border-radius:99px;background:#ffedd5;color:#c2410c;font-size:9px;letter-spacing:.05em}
+.room-ready{flex:none;color:#9a7560;font-size:11px;font-weight:700}
+.room-ready.ready{color:#15803d}
+.room-lobby-actions{display:flex;flex-wrap:wrap;gap:8px}
+.room-lobby-actions > button{flex:1;min-width:130px;width:auto}
+.room-lobby-actions .room-start-button{background:linear-gradient(135deg,#fb923c,#ea580c);box-shadow:0 4px 0 #c2410c,0 8px 18px #ea580c40}
+@media (max-width:768px),(max-height:500px) and (orientation:landscape){
+  .room-lobby-card{width:min(94vw,560px);max-height:calc(100dvh - 16px);border-radius:18px}
+  .room-lobby-body{padding:12px 14px;gap:8px}
+  .room-lobby-card .tile-modal-top-bar{padding:9px 13px}
+  .room-field{gap:4px;font-size:11px}
+  .room-field input{min-height:36px;padding:7px 10px;font-size:13px}
+  .room-lobby-body > .btn-primary-action,.room-lobby-body > .btn-secondary-action{min-height:36px;padding:8px 12px;font-size:13px}
+  .room-help{font-size:10.5px}
+  .room-code-display{padding:8px 10px}
+  .room-code-display strong{font-size:19px}
+  /* Viewport safety for multiplayer and tile modals. */
+  .modal-overlay,.tile-modal-overlay{
+    min-height:100vh;
+    min-height:100dvh;
+    overflow-y:auto;
+    overscroll-behavior:contain;
+    padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right))
+      max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left));
+  }
+  .modal-card,.tile-modal-card,.jail-card,.freeparking-card,.debt-card,.victory-card,.trade-modal-card{
+    min-width:0;
+    max-width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px);
+    max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px);
+  }
+  .modal-card,.tile-modal-card{min-height:0}
+  .tile-modal-card{overflow:hidden}
+  .tile-modal-top-bar,.tile-modal-header,.modal-header{flex:none;min-width:0}
+  .tile-modal-body,.jail-modal-body,.modal-content,.modal-body,.trade-modal-scroll{
+    min-height:0;
+    overscroll-behavior:contain;
+  }
+  .tile-modal-card>.tile-modal-body,.tile-modal-card>.jail-modal-body,.trade-modal-scroll,.modal-content{
+    flex:1 1 auto;
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+  }
+  .chance-card .tile-modal-actions,.tile-modal-card .debt-footer-actions{
+    position:sticky;
+    bottom:0;
+    z-index:1;
+    padding-bottom:max(4px,env(safe-area-inset-bottom));
+    background:#fdfcf9;
+  }
+  .trade-modal-footer{flex:none;position:sticky;bottom:0;z-index:1;background:#fff}
+  #toast{
+    left:50%;
+    right:auto;
+    bottom:max(10px,env(safe-area-inset-bottom));
+    width:auto;
+    max-width:calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 16px);
+    padding:8px 14px;
+    font-size:clamp(11px,3vw,14px);
+    line-height:1.3;
+    text-align:center;
+    white-space:normal;
+  }
+  .pl{max-width:min(38vw,150px)}
+  .pl b,.pl span{max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .auction-participants-info{max-height:12dvh;overflow-y:auto;overscroll-behavior:contain}
+  .trade-props-scroll,.debt-liquidation-list,.tile-picker-grid{
+    min-height:0;
+    overscroll-behavior:contain;
+    -webkit-overflow-scrolling:touch;
+  }
+  .trade-num-input,.trade-modal-card input,.debt-card input,.auction-card input{min-width:0;max-width:100%;user-select:text}
+  .room-lobby-card{max-height:calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 16px)}
+}
+
+@media (max-width:768px) and (pointer:coarse),
+       (max-height:500px) and (orientation:landscape) and (pointer:coarse){
+  #top-actions .btn{width:42px;height:42px;min-width:42px}
+  .btn-end-turn,.btn-jail-action,.btn-tile-choice,.btn-bid-step,.btn-pass-action,
+  .btn-primary-action,.btn-secondary-action,.btn-card-action,.btn-quick-liquidate,
+  .btn-bankruptcy-action,.partner-chip,.trade-tab-btn,.tile-modal-restore-pill,
+  .room-lobby-actions button,.room-connection button,.room-code-display button{
+    min-height:44px;
+  }
+  .auction-controls .auction-custom-bid input,.auction-controls .auction-custom-bid button,
+  .trade-num-input,.room-field input{min-height:44px}
+  .trade-prop-item{min-height:44px}
+  .chance-card .btn-primary-action{min-height:44px}
+  .tile-modal-body,.jail-modal-body,.modal-content,.room-lobby-body{font-size:12px}
+  .modal-detail-row{font-size:11.5px}
+  .btn-bid-step,.btn-pass-action,.btn-quick-liquidate,.btn-bankruptcy-action{font-size:11px}
+  .trade-tab-btn,.partner-chip{font-size:11px}
+}
+
+/* Di landscape, tombol giliran mengikuti ukuran ringkas single-player. */
+@media (max-height:500px) and (orientation:landscape){
+  #roll .btn-end-turn,
+  #roll .btn-end-turn.btn-roll-again{
+    min-height:19px !important;
+    padding:0 5px !important;
+    font-size:7.5px !important;
+  }
+  .trade-modal-card .trade-modal-footer > button{
+    flex:1 1 0;
+    width:auto;
+    min-width:0;
+  }
+  .trade-modal-card .btn-primary-action,
+  .trade-modal-card .btn-secondary-action,
+  .auction-card .btn-primary-action,
+  .auction-card .btn-secondary-action,
+  .auction-card .btn-bid-step,
+  .auction-card .btn-pass-action,
+  .chance-card .btn-primary-action,
+  .freeparking-card .btn-tile-choice,
+  .freeparking-card .tile-modal-actions button,
+  .jail-card .btn-jail-action{
+    min-height:27px !important;
+    padding-top:4px;
+    padding-bottom:4px;
+    font-size:9.5px;
+  }
+  .auction-card input{min-height:27px !important;padding-top:4px !important;padding-bottom:4px !important;font-size:9.5px}
+}
+
+/* Rapikan formulir trade dan daftar tujuan travel di layar HP. */
+@media (max-width:768px){
+  .trade-modal-card{
+    width:min(94vw,560px);
+    max-width:560px;
+    max-height:88dvh;
+  }
+  .trade-modal-card .tile-modal-top-bar{padding:6px 10px;font-size:10px}
+  .trade-modal-card .trade-modal-scroll{padding:7px 10px;gap:5px}
+  .trade-modal-card .trade-partner-selector{margin-bottom:3px}
+  .trade-modal-card .trade-partner-selector>span{font-size:9px}
+  .trade-modal-card .partner-chip{padding:3px 7px;font-size:9px}
+  .trade-modal-card .trade-columns{gap:5px}
+  .trade-modal-card .trade-col{padding:5px 6px;gap:4px;border-top-width:2px !important}
+  .trade-modal-card .trade-col-header{gap:3px;align-items:flex-start}
+  .trade-modal-card .trade-col-header b{font-size:9px;line-height:1.2}
+  .trade-modal-card .trade-col-header small{font-size:8px;white-space:nowrap}
+  .trade-modal-card .trade-field label,.trade-modal-card .trade-props-list-title{font-size:8.5px}
+  .trade-modal-card .trade-num-input{min-height:30px !important;padding:3px 6px;font-size:10px}
+  .trade-modal-card .trade-props-scroll{max-height:clamp(82px,22dvh,140px);gap:2px}
+  .trade-modal-card .trade-prop-item{min-height:30px;padding:3px 5px;gap:4px}
+  .trade-modal-card .prop-swatch{height:15px}
+  .trade-modal-card .prop-trade-meta .prop-name{font-size:9px}
+  .trade-modal-card .prop-trade-meta .prop-sub{font-size:7.5px}
+  .trade-modal-card .trade-modal-footer{padding:4px 10px;gap:5px}
+  .trade-modal-card .trade-modal-footer>.btn-primary-action{min-height:32px !important;padding:5px 8px;font-size:10px}
+
+  .freeparking-card{width:min(94vw,560px);max-width:560px;max-height:88dvh}
+  .freeparking-card .tile-modal-body{padding:7px 9px;gap:5px}
+  .freeparking-card .travel-preview-box{padding:5px 7px;margin:2px 0;border-width:1px;border-radius:8px}
+  .freeparking-card .travel-bonus-badge{padding:3px 6px;margin-top:4px;font-size:9px}
+  .freeparking-card .tile-picker-container{min-width:0;margin-top:4px}
+  .freeparking-card .tile-picker-label{font-size:8.5px;margin-bottom:3px}
+  .freeparking-card .tile-picker-grid{
+    min-height:0;
+    max-height:clamp(120px,30dvh,220px);
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-auto-rows:minmax(30px,auto);
+    gap:3px;
+    padding:3px;
+  }
+  .freeparking-card .btn-tile-choice{min-height:30px !important;padding:3px 5px;gap:4px}
+  .freeparking-card .choice-color-bar{width:4px;height:17px}
+  .freeparking-card .choice-num{font-size:7px}
+  .freeparking-card .choice-title{font-size:8px;line-height:1.1}
+}
+
+@media (max-height:500px) and (orientation:landscape){
+  .trade-modal-card{width:min(90vw,620px);max-width:620px;max-height:88dvh}
+  .trade-modal-card .trade-modal-scroll{padding:6px 9px;gap:4px}
+  .trade-modal-card .trade-props-scroll{height:clamp(64px,19dvh,92px);max-height:none}
+  .freeparking-card{width:min(90vw,580px);max-width:580px;max-height:88dvh}
+  .freeparking-card .tile-picker-grid{
+    max-height:min(29dvh,132px);
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-auto-rows:minmax(26px,auto);
+    gap:2px;
+  }
+  .freeparking-card .btn-tile-choice{min-height:26px !important;padding:2px 4px}
+  .freeparking-card .choice-num{font-size:6.5px}
+  .freeparking-card .choice-title{font-size:7.5px}
+}
+
+/* ======================================================== */
+/* ROOT LOBBY SCREEN (MAIN MENU & SELECTION)                */
+/* ======================================================== */
+
+body.in-lobby #top-actions,
+body.in-lobby #center-ui,
+body.in-lobby #hud,
+body.in-lobby #rotate-hint,
+body.in-lobby #fs-gate {
+  display: none !important;
+}
+
+/* ── Mode Local: tampilkan hanya tombol rumah, posisi kanan-atas ──── */
+body.mode-local #btn-multiplayer,
+body.mode-local [data-m="Pengaturan"] {
+  display: none !important;
+}
+body.mode-local #btn-lobby-home {
+  display: flex !important;
+}
+body.mode-local #top-actions {
+  left: auto !important;
+  right: max(16px, env(safe-area-inset-right)) !important;
+  transform: none !important;
+  top: calc(10px + env(safe-area-inset-top)) !important;
+}
+
+/* ── Mode Multiplayer: sembunyikan semua top-actions saat main ─────── */
+body.mode-multiplayer #top-actions {
+  display: none !important;
+}
+
+.lobby-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: radial-gradient(ellipse at 50% 25%, #fffdf8 0%, #f6ebd8 55%, #ecd7b9 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  transition: opacity 0.22s ease-out, visibility 0.22s ease-out;
+}
+.lobby-screen.hidden {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+.lobby-screen.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.lobby-card {
+  background: #ffffff;
+  border-radius: 22px;
+  box-shadow: 0 16px 40px rgba(60, 30, 10, 0.16), 0 2px 8px rgba(60, 30, 10, 0.08);
+  border: 2px solid #ecdac3;
+  width: min(92vw, 480px);
+  max-width: 480px;
+  padding: 24px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+  margin: auto;
+}
+
+.lobby-card-room-full {
+  width: min(94vw, 560px);
+  max-width: 560px;
+}
+
+/* Header */
+.lobby-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.lobby-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #9a3412;
+  background: #ffedd5;
+  border: 1.2px solid #fed7aa;
+  padding: 3px 10px;
+  border-radius: 99px;
+  display: inline-block;
+}
+.lobby-logo {
+  font-family: Fredoka, "Segoe UI", sans-serif;
+  font-size: clamp(38px, 9vw, 54px);
+  font-weight: 700;
+  color: #c2410c;
+  line-height: 1.05;
+  margin: 2px 0 0;
+  letter-spacing: 0.01em;
+  text-shadow: 0 2px 10px rgba(194, 65, 12, 0.2);
+}
+.lobby-subtitle {
+  font-size: 13px;
+  color: #6b533e;
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Sub-headers */
+.lobby-header-sub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1.5px solid #f0e2cf;
+  padding-bottom: 12px;
+}
+.btn-lobby-back {
+  background: #fdfaf5;
+  border: 1.5px solid #e2d2bf;
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #6b533e;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.btn-lobby-back:hover {
+  background: #f5ebe0;
+  transform: translateX(-2px);
+}
+.header-sub-text h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  color: #3b2a1a;
+  line-height: 1.2;
+}
+.header-sub-text p {
+  margin: 2px 0 0;
+  font-size: 11.5px;
+  color: #786049;
+}
+
+/* Mode Selection Cards */
+.lobby-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lobby-mode-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 2px solid #ecdac3;
+  background: linear-gradient(135deg, #fffbf7, #fdf6ec);
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  box-sizing: border-box;
+  transition: transform 0.18s, border-color 0.18s, box-shadow 0.18s;
+}
+.lobby-mode-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(90, 45, 10, 0.12);
+}
+.lobby-mode-card:active {
+  transform: translateY(1px);
+}
+.lobby-mode-card.mode-local {
+  border-left: 6px solid #16a34a;
+}
+.lobby-mode-card.mode-local:hover {
+  border-color: #86efac;
+  border-left-color: #16a34a;
+}
+.lobby-mode-card.mode-multiplayer {
+  border-left: 6px solid #2563eb;
+}
+.lobby-mode-card.mode-multiplayer:hover {
+  border-color: #93c5fd;
+  border-left-color: #2563eb;
+}
+
+.mode-icon-wrap {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(60, 30, 10, 0.08);
+  border: 1.5px solid #f0e2cf;
+  font-size: 24px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.mode-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.mode-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mode-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #2e1f13;
+}
+.mode-tag {
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 99px;
+  letter-spacing: 0.06em;
+}
+.tag-offline {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.tag-online {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+.mode-desc {
+  margin: 0;
+  font-size: 11.5px;
+  color: #6b533e;
+  line-height: 1.35;
+}
+.mode-arrow {
+  font-size: 16px;
+  color: #b08d6d;
+  flex-shrink: 0;
+}
+
+/* Status server di menu utama */
+.lobby-server-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #6b533e;
+  padding-top: 4px;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.lobby-server-status.online .status-dot {
+  background: #22c55e;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+}
+.lobby-server-status.offline .status-dot {
+  background: #ef4444;
+}
+
+/* Local Setup Section */
+.section-title {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #4a3422;
+  margin-bottom: 8px;
+}
+.local-count-chips {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.btn-count-chip {
+  flex: 1;
+  padding: 9px 8px;
+  border-radius: 12px;
+  border: 1.5px solid #dfcfbc;
+  background: #fdfbf8;
+  color: #553d29;
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.btn-count-chip:hover {
+  background: #f5ebe0;
+}
+.btn-count-chip.active {
+  background: #ffedd5;
+  border-color: #ea580c;
+  color: #9a3412;
+  box-shadow: 0 2px 6px rgba(234, 88, 12, 0.2);
+}
+
+.local-roster-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.local-player-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #faf6f0;
+  border: 1.2px solid #ecdac3;
+  padding: 8px 12px;
+  border-radius: 12px;
+}
+.local-color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.local-player-label {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.local-player-role {
+  font-size: 10px;
+  font-weight: 700;
+  color: #785a3c;
+  text-transform: uppercase;
+}
+.local-player-input {
+  border: 1px solid #d4c3ad;
+  border-radius: 7px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #2b1d12;
+  background: #ffffff;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+.local-player-input:focus {
+  border-color: #ea580c;
+  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.18);
+}
+
+/* Info Tips */
+.lobby-info-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff7ed;
+  border: 1.2px solid #ffedd5;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #9a3412;
+  line-height: 1.35;
+  margin: 12px 0;
+}
+.lobby-info-tip.ready-tip {
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #166534;
+}
+.tip-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.btn-lobby-big {
+  width: 100%;
+  min-height: 46px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(194, 65, 12, 0.25);
+}
+
+/* Multiplayer Tabs */
+.mp-mode-tabs {
+  display: flex;
+  gap: 6px;
+  background: #f0e5d5;
+  padding: 4px;
+  border-radius: 14px;
+  margin-bottom: 14px;
+}
+.btn-mp-tab {
+  flex: 1;
+  padding: 9px 8px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b533e;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.btn-mp-tab.active {
+  background: #ffffff;
+  color: #c2410c;
+  box-shadow: 0 2px 6px rgba(60, 30, 10, 0.1);
+}
+.mp-tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.mp-tab-desc {
+  margin: 0;
+  font-size: 12px;
+  color: #786049;
+  line-height: 1.35;
+}
+
+/* Full Room View */
+.room-full-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1.5px solid #ecdac3;
+  padding-bottom: 12px;
+}
+.room-status-badge {
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.06em;
+}
+.room-status-badge.waiting {
+  background: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+.room-status-badge.started {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.room-player-count {
+  font-size: 12.5px;
+  color: #6b533e;
+}
+
+.room-code-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #fff7ed, #ffedd5);
+  border: 2px dashed #fdba74;
+  border-radius: 16px;
+  padding: 16px;
+  gap: 6px;
+  text-align: center;
+  margin-bottom: 12px;
+}
+.code-panel-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: #9a3412;
+}
+.code-panel-number {
+  font-family: monospace;
+  font-size: clamp(30px, 8vw, 42px);
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  color: #c2410c;
+  line-height: 1;
+}
+.btn-copy-code {
+  background: #ffffff;
+  border: 1.5px solid #fed7aa;
+  color: #9a3412;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.btn-copy-code:hover {
+  background: #fff7ed;
+  transform: scale(1.03);
+}
+
+.room-roster-box {
+  background: #faf6f0;
+  border: 1.5px solid #ecdac3;
+  border-radius: 14px;
+  padding: 12px;
+}
+.roster-heading {
+  font-size: 11px;
+  font-weight: 800;
+  color: #785a3c;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+.room-roster-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.room-roster-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1.2px solid #ecdac3;
+  border-radius: 10px;
+  padding: 8px 12px;
+  gap: 8px;
+}
+.room-roster-item.is-self {
+  border-color: #fdba74;
+  background: #fffaf5;
+}
+.roster-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.roster-avatar-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+.roster-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.roster-player-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2e1f13;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.badge-host {
+  font-size: 8.5px;
+  font-weight: 800;
+  background: #fef08a;
+  color: #854d0e;
+  border: 1px solid #fde047;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.badge-self {
+  font-size: 8.5px;
+  font-weight: 800;
+  background: #dbeafe;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.roster-ready-pill {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+.roster-ready-pill.ready {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+.roster-ready-pill.not-ready {
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+.roster-ready-pill.offline {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.room-actions-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+.btn-ready {
+  min-height: 44px;
+}
+.btn-ready.is-ready {
+  background: linear-gradient(135deg, #e2e8f0, #cbd5e1) !important;
+  color: #334155 !important;
+  border-color: #94a3b8 !important;
+  box-shadow: none !important;
+}
+.btn-start-game {
+  min-height: 46px;
+  font-size: 15px;
+  background: linear-gradient(135deg, #16a34a, #15803d) !important;
+  box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3) !important;
+}
+.btn-leave {
+  min-height: 38px;
+  border-radius: 10px;
+}
+
+/* Penataan khusus HP landscape: modal trade lebih ringkas dan travel punya grid tujuan yang utuh. */
+@media (pointer:coarse) and (orientation:landscape){
+  .trade-modal-card{
+    width:min(88vw,460px) !important;
+    max-width:460px !important;
+    max-height:84dvh !important;
+    border-radius:12px !important;
+  }
+  .trade-modal-card .tile-modal-top-bar{
+    min-height:30px;
+    padding:4px 8px !important;
+    font-size:9px !important;
+  }
+  .trade-modal-card .tile-modal-top-bar .btn-x-top{width:22px;height:22px;font-size:13px}
+  .trade-modal-card .trade-modal-scroll{
+    padding:5px 8px !important;
+    gap:3px !important;
+  }
+  .trade-modal-card .trade-partner-selector{gap:2px;margin:0 0 2px}
+  .trade-modal-card .trade-partner-selector>span{font-size:8px}
+  .trade-modal-card .partner-chips{gap:3px;padding:0;max-width:100%}
+  .trade-modal-card .partner-chip{padding:2px 6px;font-size:8px;gap:3px}
+  .trade-modal-card .chip-dot{width:6px;height:6px}
+  .trade-modal-card .trade-columns{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px}
+  .trade-modal-card .trade-col{padding:4px 5px;gap:3px;border-radius:7px}
+  .trade-modal-card .trade-col-header{gap:2px}
+  .trade-modal-card .trade-col-header b{font-size:8px;line-height:1.1}
+  .trade-modal-card .trade-col-header small{font-size:7px}
+  .trade-modal-card .trade-field{gap:2px}
+  .trade-modal-card .trade-field label,.trade-modal-card .trade-props-list-title{font-size:7.5px;line-height:1.1}
+  .trade-modal-card .trade-num-input{min-height:24px !important;height:24px;padding:2px 5px;font-size:9px}
+  .trade-modal-card .trade-props-scroll{height:clamp(54px,17dvh,78px);max-height:none;gap:2px}
+  .trade-modal-card .trade-prop-item{min-height:23px;padding:2px 4px;gap:3px}
+  .trade-modal-card .trade-prop-item input{width:12px;height:12px;margin:0}
+  .trade-modal-card .prop-swatch{width:4px;height:13px}
+  .trade-modal-card .prop-trade-meta .prop-name{font-size:8px;line-height:1.05}
+  .trade-modal-card .prop-trade-meta .prop-sub{font-size:6.5px;line-height:1}
+  .trade-modal-card .trade-modal-footer{padding:3px 8px !important;gap:4px}
+  .trade-modal-card .trade-modal-footer>.btn-primary-action,
+  .trade-modal-card .trade-modal-footer>.btn-secondary-action{
+    min-height:25px !important;
+    padding:3px 7px !important;
+    font-size:8px !important;
+    border-radius:7px;
+  }
+
+  .freeparking-card{
+    width:min(90vw,500px) !important;
+    max-width:500px !important;
+    max-height:min(84dvh,360px) !important;
+    border-radius:12px !important;
+  }
+  .freeparking-card .tile-modal-top-bar{min-height:30px;padding:4px 8px !important;font-size:8.5px}
+  .freeparking-card .tile-modal-body{
+    display:grid !important;
+    grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr);
+    grid-template-areas:
+      "title picker"
+      "subtitle picker"
+      "preview picker"
+      "balance picker"
+      "alert picker"
+      "actions picker";
+    grid-auto-rows:min-content;
+    align-content:start;
+    align-items:start;
+    gap:3px 7px !important;
+    padding:6px 8px !important;
+    overflow:hidden;
+    font-size:8px;
+  }
+  .freeparking-card .tile-modal-body>.tile-prop-title{grid-area:title;font-size:12px;line-height:1.05}
+  .freeparking-card .tile-modal-body>.tile-prop-subtitle{grid-area:subtitle;font-size:8px;line-height:1.2}
+  .freeparking-card .travel-preview-box{grid-area:preview;padding:4px 5px;margin:0;border-width:1px;border-radius:7px}
+  .freeparking-card .preview-lbl,.freeparking-card .tile-picker-label{font-size:7px;line-height:1.1}
+  .freeparking-card .preview-name{font-size:9px;line-height:1.1}
+  .freeparking-card .travel-bonus-badge{padding:2px 4px;margin-top:3px;font-size:7.5px;line-height:1.1}
+  .freeparking-card .tile-picker-container{grid-area:picker;min-width:0;width:100%;margin:0}
+  .freeparking-card .tile-picker-label{margin-bottom:3px}
+  .freeparking-card .tile-picker-grid{
+    width:100%;
+    min-height:0;
+    max-height:min(42dvh,190px);
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    grid-auto-rows:minmax(27px,auto);
+    align-content:start;
+    gap:2px;
+    padding:3px;
+    overflow-y:auto;
+  }
+  .freeparking-card .btn-tile-choice{min-width:0;min-height:25px !important;padding:2px 3px;gap:3px;border-radius:5px}
+  .freeparking-card .choice-color-bar{width:3px;height:15px}
+  .freeparking-card .choice-info{min-width:0;gap:0}
+  .freeparking-card .choice-num{font-size:6px;line-height:1}
+  .freeparking-card .choice-title{font-size:7px;line-height:1.05;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+  .freeparking-card .player-balance-strip{grid-area:balance;margin-top:0 !important;padding:3px 5px;font-size:8px}
+  .freeparking-card .player-balance-strip b{font-size:8px}
+  .freeparking-card .alert-insufficient{grid-area:alert;padding:3px 5px;font-size:7px}
+  .freeparking-card .tile-modal-actions{grid-area:actions;display:flex;flex-direction:column;gap:3px;margin:0 !important}
+  .freeparking-card .tile-modal-actions button{min-height:24px !important;padding:3px 5px !important;font-size:7.5px !important;border-radius:7px}
+}
+
+/* ======================================================== */
+/* PARKIR BEBAS: pilih tempat parkir langsung di papan       */
+/* ======================================================== */
+/* Selama memilih, klaster putaran/dadu disembunyikan dan petunjuk menempati pusat papan. */
+body.parking-picking #center-ui{visibility:hidden;pointer-events:none}
+body.parking-picking #center-ui > *{pointer-events:none}
+.parking-pick-panel{
+  position:fixed;
+  left:var(--cx,50%);
+  top:var(--cy,50%);
+  transform:translate(-50%,-50%) scale(var(--cs,1));
+  z-index:25;
+  box-sizing:border-box;
+  width:min(236px,62vw);
+  padding:12px 14px 14px;
+  display:grid;
+  gap:6px;
+  justify-items:center;
+  text-align:center;
+  color:#3b2410;
+  background:linear-gradient(180deg,#fffaf0,#fde9c4);
+  border:2px solid #f59e0b;
+  border-radius:16px;
+  box-shadow:0 0 0 4px #fde68a99,0 10px 26px #7c2d1255;
+  animation:pp-pop .22s ease-out;
+}
+.parking-pick-panel .pp-title{font-size:16px;font-weight:800;line-height:1.15}
+.parking-pick-panel .pp-cost{
+  padding:1px 10px;
+  border-radius:99px;
+  background:#f59e0b;
+  color:#fff;
+  font-size:13px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.parking-pick-panel .pp-hint{font-size:12.5px;font-weight:600;color:#795438;line-height:1.25}
+.parking-pick-panel .pp-skip{
+  margin-top:4px;
+  padding:8px 12px;
+  font:inherit;
+  font-size:13px;
+  font-weight:800;
+  color:#3b2410;
+  background:#fff;
+  border:2px solid #d6b98c;
+  border-radius:12px;
+  cursor:pointer;
+  transition:transform .12s,background .12s;
+}
+.parking-pick-panel .pp-skip:hover{background:#fff4dc;transform:translateY(-1px)}
+.parking-pick-panel .pp-skip:active{transform:translateY(1px)}
+.parking-pick-panel.broke{border-color:#ef4444;box-shadow:0 0 0 4px #fecaca99,0 10px 26px #7f1d1d44}
+@keyframes pp-pop{from{opacity:0;transform:translate(-50%,-50%) scale(calc(var(--cs,1)*.92))}to{opacity:1}}
+@media (max-height:500px) and (orientation:landscape){
+  .parking-pick-panel{width:min(210px,50vw);padding:8px 10px 10px;gap:4px}
+  .parking-pick-panel .pp-title{font-size:13px}
+  .parking-pick-panel .pp-cost{font-size:11px}
+  .parking-pick-panel .pp-hint{font-size:11px}
+  .parking-pick-panel .pp-skip{padding:6px 8px;font-size:11.5px}
+}
+@media (prefers-reduced-motion:reduce){.parking-pick-panel{animation:none}}
+body.in-lobby .parking-pick-panel{display:none}

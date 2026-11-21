@@ -2,28 +2,33 @@ import {gameState, PlayerStatus} from './GameState.js';
 import {economyManager, TransactionType} from './EconomyManager.js';
 import {returnGetOutOfJailCard} from '../data/cards.js';
 import {toast, buildHud} from '../ui/hud.js';
+import {BAIL_COST, MAX_JAIL_TURNS} from './jailRules.js';
 
-export const BAIL_COST = 50;
-export const MAX_JAIL_TURNS = 3;
+export {BAIL_COST, MAX_JAIL_TURNS};
 
 export class JailManager {
+  constructor(state = gameState, economy = economyManager) {
+    this.state = state;
+    this.economy = economy;
+  }
+
   isInJail(playerId) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     return player ? (player.status === PlayerStatus.IN_JAIL || player.inJail === true) : false;
   }
 
   getJailTurns(playerId) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     return player ? (player.jailTurns || 0) : 0;
   }
 
   hasGetOutOfJailCard(playerId) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     return player ? ((player.hasGetOutOfJailCard || 0) > 0) : false;
   }
 
   sendToJail(playerId, reason = 'KE PENJARA') {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return false;
 
     // Pindahkan pion langsung ke petak Penjara (posisi 10)
@@ -32,7 +37,7 @@ export class JailManager {
     player.inJail = true;
     player.jailTurns = 0;
     player.consecutiveDoubles = 0;
-    gameState.consecutiveDoubles = 0;
+    this.state.consecutiveDoubles = 0;
 
     toast(`🔒 ${player.name} masuk ke Penjara! (${reason})`);
     buildHud();
@@ -47,14 +52,14 @@ export class JailManager {
   }
 
   releaseFromJail(playerId) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return false;
 
     player.status = PlayerStatus.ACTIVE;
     player.inJail = false;
     player.jailTurns = 0;
     player.consecutiveDoubles = 0;
-    gameState.consecutiveDoubles = 0;
+    this.state.consecutiveDoubles = 0;
 
     buildHud();
 
@@ -68,18 +73,18 @@ export class JailManager {
   }
 
   payBail(playerId) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return { success: false, message: 'Pemain tidak ditemukan.' };
     if (!this.isInJail(playerId)) return { success: false, message: 'Pemain tidak sedang dipenjara.' };
 
-    if (!economyManager.hasEnoughMoney(playerId, BAIL_COST)) {
+    if (!this.economy.hasEnoughMoney(playerId, BAIL_COST)) {
       return {
         success: false,
         message: `Saldo ${player.name} tidak cukup untuk membayar denda $${BAIL_COST}!`
       };
     }
 
-    const paid = economyManager.deductMoney(
+    const paid = this.economy.deductMoney(
       playerId,
       BAIL_COST,
       `Denda keluar dari Penjara: -$${BAIL_COST}`,
@@ -101,7 +106,7 @@ export class JailManager {
   }
 
   useGetOutOfJailCard(playerId) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return { success: false, message: 'Pemain tidak ditemukan.' };
     if (!this.isInJail(playerId)) return { success: false, message: 'Pemain tidak sedang dipenjara.' };
 
@@ -121,7 +126,7 @@ export class JailManager {
   }
 
   processJailRoll(playerId, diceRoll) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return { success: false, message: 'Pemain tidak ditemukan.' };
     if (!this.isInJail(playerId)) return { success: false, message: 'Pemain tidak sedang dipenjara.' };
 
@@ -147,10 +152,10 @@ export class JailManager {
 
     // Jika sudah percobaan ke-3 gagal -> Wajib bayar denda $50
     if (player.jailTurns >= MAX_JAIL_TURNS) {
-      const hasMoney = economyManager.hasEnoughMoney(playerId, BAIL_COST);
+      const hasMoney = this.economy.hasEnoughMoney(playerId, BAIL_COST);
 
       if (hasMoney) {
-        economyManager.deductMoney(
+        this.economy.deductMoney(
           playerId,
           BAIL_COST,
           `Denda wajib giliran ke-3 Penjara: -$${BAIL_COST}`,

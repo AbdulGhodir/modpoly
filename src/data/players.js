@@ -7,3 +7,4 @@ gameState.tiles = TILES;
 export const PLAYERS = gameState.players;
 export const GAME = gameState;
 export {PlayerStatus, GameStatus, gameState};
+export {GameState, createGameState} from '../logic/GameState.js';

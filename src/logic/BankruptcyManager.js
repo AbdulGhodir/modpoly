@@ -5,8 +5,15 @@ import {auctionManager} from './AuctionManager.js';
 import {toast, buildHud} from '../ui/hud.js';
 
 export class BankruptcyManager {
+  constructor(state = gameState, economy = economyManager, properties = propertyManager, auction = auctionManager) {
+    this.state = state;
+    this.economy = economy;
+    this.properties = properties;
+    this.auction = auction;
+  }
+
   checkSolvency(playerId, amountToPay) {
-    const player = gameState.getPlayerById(playerId);
+    const player = this.state.getPlayerById(playerId);
     if (!player) return { canPayNow: false, canLiquidateToPay: false, totalLiquidationValue: 0 };
 
     if (player.money >= amountToPay) {
@@ -21,7 +28,7 @@ export class BankruptcyManager {
     const deficit = amountToPay - player.money;
     let liquidationValue = player.money;
 
-    const props = propertyManager.getPlayerProperties(playerId);
+    const props = this.properties.getPlayerProperties(playerId);
     props.forEach(p => {
       // Nilai penjualan bangunan (50% dari harga bangun)
       if (p.hasHotel) {
@@ -45,27 +52,27 @@ export class BankruptcyManager {
   }
 
   declareBankruptcy(debtorId, creditorId, debtAmount = 0) {
-    const debtor = gameState.getPlayerById(debtorId);
+    const debtor = this.state.getPlayerById(debtorId);
     if (!debtor) return false;
 
     debtor.status = PlayerStatus.BANKRUPT;
     debtor.consecutiveDoubles = 0;
-    if (gameState.getActivePlayer()?.id === debtor.id) {
-      gameState.consecutiveDoubles = 0;
-      gameState.lastRoll = null;
+    if (this.state.getActivePlayer()?.id === debtor.id) {
+      this.state.consecutiveDoubles = 0;
+      this.state.lastRoll = null;
     }
 
     // Hapus debitor dari lelang aktif jika lelang sedang berlangsung
-    if (auctionManager && auctionManager.isActive) {
-      auctionManager.removePlayerFromAuction(debtor.id);
+    if (this.auction && this.auction.isActive) {
+      this.auction.removePlayerFromAuction(debtor.id);
     }
 
     const creditor = (creditorId && creditorId !== 'BANK')
-      ? gameState.getPlayerById(creditorId)
+      ? this.state.getPlayerById(creditorId)
       : null;
 
     // 1. Likuidasi seluruh bangunan (rumah / hotel) milik debitor kembali ke Bank
-    const debtorProps = propertyManager.getPlayerProperties(debtor.id);
+    const debtorProps = this.properties.getPlayerProperties(debtor.id);
     let buildingLiquidationCash = 0;
 
     debtorProps.forEach(p => {
@@ -73,12 +80,12 @@ export class BankruptcyManager {
         const refund = Math.floor((p.hotelPrice || 50) * 0.5);
         buildingLiquidationCash += refund;
         p.hasHotel = false;
-        if (typeof gameState.bankHotels === 'number') gameState.bankHotels++;
+        if (typeof this.state.bankHotels === 'number') this.state.bankHotels++;
       }
       if (p.houses > 0) {
         const refund = Math.floor((p.housePrice || 50) * 0.5) * p.houses;
         buildingLiquidationCash += refund;
-        if (typeof gameState.bankHouses === 'number') gameState.bankHouses += p.houses;
+        if (typeof this.state.bankHouses === 'number') this.state.bankHouses += p.houses;
         p.houses = 0;
       }
     });
@@ -91,7 +98,7 @@ export class BankruptcyManager {
       // Transfer seluruh sisa uang + hasil likuidasi bangunan ke kreditur
       if (totalCash > 0) {
         creditor.money += totalCash;
-        economyManager.logTransaction({
+        this.economy.logTransaction({
           players: [debtor.name, creditor.name],
           amount: totalCash,
           type: TransactionType.BANKRUPTCY,
@@ -108,12 +115,12 @@ export class BankruptcyManager {
       // Serahkan seluruh properti kepada kreditur (status hipotek tetap melekat)
       debtorProps.forEach(p => {
         const wasMortgaged = p.isMortgaged;
-        propertyManager.setOwner(p.pos, creditor.id);
+        this.properties.setOwner(p.pos, creditor.id);
         if (wasMortgaged) {
           p.isMortgaged = true; // Status hipotek tetap melekat
           const interest = Math.round((p.mortgageValue || 0) * 0.1);
           if (interest > 0 && creditor.money >= interest) {
-            economyManager.deductMoney(
+            this.economy.deductMoney(
               creditor.id,
               interest,
               `Bunga 10% atas penerimaan properti tergadai: ${p.name}`,
@@ -128,7 +135,7 @@ export class BankruptcyManager {
     // 3. Kasus B: Bangkrut kepada Bank
     else {
       if (totalCash > 0) {
-        economyManager.logTransaction({
+        this.economy.logTransaction({
           players: [debtor.name, 'Bank'],
           amount: totalCash,
           type: TransactionType.BANKRUPTCY,
@@ -141,7 +148,7 @@ export class BankruptcyManager {
       // Kembalikan seluruh properti ke Bank (status kepemilikan dilepas)
       debtorProps.forEach(p => {
         p.isMortgaged = false;
-        propertyManager.setOwner(p.pos, null);
+        this.properties.setOwner(p.pos, null);
       });
 
       toast(`💥 ${debtor.name} BANGKRUT kepada Bank! Semua properti dikembalikan ke Bank.`);
@@ -162,20 +169,20 @@ export class BankruptcyManager {
   }
 
   getActivePlayers() {
-    return gameState.players.filter(p => p.status !== PlayerStatus.BANKRUPT);
+    return this.state.players.filter(p => p.status !== PlayerStatus.BANKRUPT);
   }
 
   checkWinner() {
     const activePlayers = this.getActivePlayers();
-    if (activePlayers.length === 1 && gameState.gameStatus !== GameStatus.FINISHED) {
+    if (activePlayers.length === 1 && this.state.gameStatus !== GameStatus.FINISHED) {
       const winner = activePlayers[0];
-      gameState.gameStatus = GameStatus.FINISHED;
+      this.state.gameStatus = GameStatus.FINISHED;
 
       toast(`🏆 PERMAINAN SELESAI! ${winner.name} (${winner.cn}) MENANG MUTLAK!`);
 
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('game:over', {
-          detail: { winner, totalPlayers: gameState.players.length }
+          detail: { winner, totalPlayers: this.state.players.length }
         }));
       }
 

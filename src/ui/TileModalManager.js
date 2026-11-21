@@ -1,4 +1,5 @@
-import {gameState, PlayerStatus} from '../logic/GameState.js';
+import {PlayerStatus} from '../logic/GameState.js';
+import {clientGameStore} from '../state/ClientGameStore.js';
 import {economyManager, TransactionType} from '../logic/EconomyManager.js';
 import {propertyManager} from '../logic/PropertyManager.js';
 import {auctionManager} from '../logic/AuctionManager.js';
@@ -7,6 +8,11 @@ import {drawChanceCard} from '../data/cards.js';
 import {COL} from '../config.js';
 import {TILES} from '../data/tiles.js';
 import {toast, buildHud} from './hud.js';
+import {createActionGuard} from '../logic/ActionGuard.js';
+import {isLocalAuctionBidder, parseCustomAuctionBid} from './MultiplayerAuction.js';
+
+const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[char]));
+const formatAuctionMoney = value => `$${Number(value || 0).toLocaleString('id-ID')}`;
 
 export class TileModalManager {
   constructor() {
@@ -14,6 +20,12 @@ export class TileModalManager {
     this.minimized = false;
     this.restoreBtn = null;
     this.currentPropName = '';
+    this.closeTimer = null;
+    this.displayedChanceResolutionIds = new Set();
+    this.displayedRentResolutionIds = new Set();
+    this.authoritativeAuctionId = null;
+    this.authoritativeChanceAutoCloseTimer = null;
+    this.currentChancePresentationId = null;
     this.initDOM();
   }
 
@@ -105,14 +117,19 @@ export class TileModalManager {
   }
 
   close() {
+    clearTimeout(this.authoritativeChanceAutoCloseTimer);
+    this.authoritativeChanceAutoCloseTimer = null;
     if (!this.overlay) return;
+    clearTimeout(this.closeTimer);
     this.minimized = false;
+    this.currentChancePresentationId = null;
     this._removeRestoreButton();
     this.overlay.classList.remove('minimized');
     this.overlay.classList.remove('visible');
-    setTimeout(() => {
+    this.closeTimer = setTimeout(() => {
       this.overlay.classList.add('hidden');
       this.overlay.innerHTML = '';
+      this.closeTimer = null;
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('tilemodal:closed'));
       }
@@ -120,6 +137,10 @@ export class TileModalManager {
   }
 
   _showContent(html, propName = '') {
+    // A new modal arriving during the previous close animation must not be
+    // cleared by that previous close timer.
+    clearTimeout(this.closeTimer);
+    this.closeTimer = null;
     if (propName) {
       this.currentPropName = propName;
     }
@@ -152,8 +173,112 @@ export class TileModalManager {
   // ========================================================
   // 1. POPUP PEMBELIAN PROPERTI
   // ========================================================
-  promptPurchase(prop, player) {
+  showAuthoritativeChanceCard(event, {canContinue = true, onContinue = null, autoCloseMs = 3200} = {}) {
+    const card = event?.card;
+    const presentationId = event?.presentationId || event?.resolutionId;
+    if (!card || typeof presentationId !== 'string' || this.displayedChanceResolutionIds.has(presentationId)) return false;
+    this.displayedChanceResolutionIds.add(presentationId);
+    this.currentChancePresentationId = presentationId;
+    const money = value => `$${Number(value || 0).toLocaleString('id-ID')}`;
+    const amountLabels = {
+      MONEY_GAIN: `+${money(card.amount)} (Pemasukan)`,
+      MONEY_LOSS: `-${money(card.amount)} (Pengeluaran)`,
+      PAY_EACH_PLAYER: `Bayar ${money(card.amount)} ke tiap pemain`,
+      COLLECT_FROM_EACH_PLAYER: `Terima ${money(card.amount)} dari tiap pemain`,
+      REPAIR_BUILDINGS: `Biaya renovasi ${money(card.houseCost)} per rumah, ${money(card.hotelCost)} per hotel`
+    };
+    const resultLabel = amountLabels[card.type] || (canContinue
+      ? 'Lanjutkan untuk menerapkan efek kartu' : 'Pemain aktif sedang membaca kartu');
+    const resultClass = ['MONEY_LOSS', 'PAY_EACH_PLAYER', 'REPAIR_BUILDINGS'].includes(card.type) ? 'loss' : 'gain';
+    const html = `
+      <div class="tile-modal-card chance-card">
+        <div class="tile-modal-top-bar" style="background:#8b5cf6">
+          <div class="tile-modal-top-info"><span>🎴 KARTU KESEMPATAN</span><span class="top-bar-sub">Presentasi kartu online</span></div>
+          <button type="button" class="btn-tile-minimize" title="Perkecil modal" aria-label="Minimize"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="2.5" y1="8" x2="13.5" y2="8"/></svg></button>
+        </div>
+        <div class="tile-modal-body text-center chance-modal-body">
+          <div class="chance-card-icon">${card.icon || '🎴'}</div>
+          <h3 class="chance-card-title">${card.title}</h3>
+          <p class="chance-card-desc">${card.desc}</p>
+          <div class="chance-effect-badge ${resultClass}">${resultLabel}</div>
+        <div class="tile-modal-actions chance-actions">${canContinue
+            ? '<button id="btn-chance-authoritative-ok" class="btn-primary-action">Lanjutkan</button>'
+            : '<span class="chance-viewing-hint">Pemain aktif sedang membaca kartu…</span>'}</div>
+        </div>
+      </div>`;
+    this._showContent(html, `Kesempatan: ${card.title}`);
+    const button = document.getElementById('btn-chance-authoritative-ok');
+    if (button) button.onclick = async () => {
+      if (button.disabled || typeof onContinue !== 'function') return;
+      button.disabled = true;
+      button.textContent = 'Memproses…';
+      const result = await onContinue();
+      if (result?.ok) this.close();
+      else if (button.isConnected) {
+        button.disabled = false;
+        button.textContent = 'Lanjutkan';
+        if (result?.message) {
+          const status = this.overlay.querySelector('.chance-effect-badge');
+          if (status) status.textContent = result.message;
+        }
+      }
+    };
+    if (!canContinue) {
+      clearTimeout(this.authoritativeChanceAutoCloseTimer);
+      this.authoritativeChanceAutoCloseTimer = setTimeout(() => {
+        if (this.currentChancePresentationId === presentationId && this.displayedChanceResolutionIds.has(presentationId)) this.close();
+      }, autoCloseMs);
+    }
+    return true;
+  }
+
+  showAuthoritativeRentResult(event) {
+    const rent = event?.rent;
+    const resolutionId = event?.resolutionId;
+    if (!rent || typeof resolutionId !== 'string' || this.displayedRentResolutionIds.has(resolutionId)) return false;
+    this.displayedRentResolutionIds.add(resolutionId);
+    const format = value => `$${Number(value || 0).toLocaleString('id-ID')}`;
+    const paid = rent.outcome === 'PAID';
+    const insufficient = rent.outcome === 'INSUFFICIENT_FUNDS';
+    const title = paid ? 'SEWA TELAH DIBAYAR' : insufficient ? 'SALDO SEWA TIDAK CUKUP' : 'PROPERTI DIGADAIKAN';
+    const status = paid
+      ? `${rent.tenantName} membayar ${format(rent.amount)} kepada ${rent.ownerName}.`
+      : insufficient
+        ? `${rent.tenantName} kekurangan saldo. Giliran ditahan sampai penyelesaian utang tersedia.`
+        : `Tidak ada sewa yang dibayar kepada ${rent.ownerName}.`;
+    const nextPlayer = clientGameStore.getActivePlayer()?.name || '—';
+    const turnStatus = event.phase === 'DEBT_RESOLUTION'
+      ? 'Menunggu penyelesaian utang'
+      : `Giliran berikutnya: ${nextPlayer}`;
+    const html = `
+      <div class="tile-modal-card chance-card">
+        <div class="tile-modal-top-bar" style="background:#0f766e">
+          <div class="tile-modal-top-info"><span>HASIL PEMBAYARAN SEWA</span><span class="top-bar-sub">Resolusi resmi permainan online</span></div>
+          <button type="button" class="btn-tile-minimize" title="Perkecil modal" aria-label="Minimize"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="2.5" y1="8" x2="13.5" y2="8"/></svg></button>
+        </div>
+        <div class="tile-modal-body text-center chance-modal-body">
+          <h3 class="chance-card-title">${title}</h3>
+          <div class="tile-details-box">
+            <div class="modal-detail-row"><span>Penyewa:</span><b>${rent.tenantName}</b></div>
+            <div class="modal-detail-row"><span>Pemilik:</span><b>${rent.ownerName}</b></div>
+            <div class="modal-detail-row"><span>Properti:</span><b>${rent.propertyName}</b></div>
+            <div class="modal-detail-row"><span>Jumlah sewa:</span><b class="price-highlight">${format(rent.amount)}</b></div>
+            <div class="modal-detail-row"><span>Saldo ${rent.tenantName}:</span><b>${format(rent.tenantBalance)}</b></div>
+            <div class="modal-detail-row"><span>Saldo ${rent.ownerName}:</span><b>${format(rent.ownerBalance)}</b></div>
+          </div>
+          <p>${status}</p><div class="chance-effect-badge ${paid ? 'gain' : 'loss'}">${turnStatus}</div>
+          <div class="tile-modal-actions chance-actions"><button id="btn-rent-authoritative-ok" class="btn-primary-action">Lanjutkan</button></div>
+        </div>
+      </div>`;
+    this._showContent(html, `Sewa: ${rent.propertyName}`);
+    const button = document.getElementById('btn-rent-authoritative-ok');
+    if (button) button.onclick = () => this.close();
+    return true;
+  }
+
+  promptPurchase(prop, player, {onDecision = null} = {}) {
     return new Promise((resolve) => {
+      const authoritative = typeof onDecision === 'function';
       const colorBar = COL[prop.group] || (prop.type === 'rail' ? '#334155' : '#0284c7');
       const typeLabel = prop.type === 'prop' ? 'Kota' : (prop.type === 'rail' ? 'Stasiun Kereta' : 'Utilitas Perusahaan');
       const canAfford = player.money >= prop.price;
@@ -212,7 +337,7 @@ export class TileModalManager {
               <button id="btn-buy-prop" class="btn-primary-action" ${!canAfford ? 'disabled' : ''}>
                 💰 Beli Properti ($${prop.price})
               </button>
-              <button id="btn-auction-prop" class="btn-secondary-action">
+              <button id="${authoritative ? 'btn-decline-prop' : 'btn-auction-prop'}" class="btn-secondary-action">
                 ⚖️ Lewati (Masuk Lelang)
               </button>
             </div>
@@ -225,29 +350,56 @@ export class TileModalManager {
       const btnBuy = document.getElementById('btn-buy-prop');
       const btnAuction = document.getElementById('btn-auction-prop');
 
+      if (authoritative) {
+        const btnDecline = document.getElementById('btn-decline-prop');
+        if (btnDecline) btnDecline.textContent = 'Masuk Lelang';
+        const submitDecision = createActionGuard(async decision => {
+          if (btnBuy) btnBuy.disabled = true;
+          if (btnDecline) btnDecline.disabled = true;
+          const response = await onDecision(decision);
+          if (!response?.ok) {
+            toast(response?.error?.message || 'Keputusan belum dapat diproses.');
+            if (response?.expired) {
+              this.close();
+              resolve({action: 'EXPIRED'});
+              return true;
+            }
+            if (btnBuy) btnBuy.disabled = !canAfford;
+            if (btnDecline) btnDecline.disabled = false;
+            return false;
+          }
+          if (response.auctionStarted) {
+            resolve({action: 'AUCTION_STARTED'});
+            return true;
+          }
+          this.close();
+          resolve({action: decision});
+          return true;
+        });
+        if (btnBuy && canAfford) btnBuy.onclick = () => submitDecision('BUY');
+        if (btnDecline) btnDecline.onclick = () => submitDecision('DECLINE');
+        return;
+      }
+
       if (btnBuy && canAfford) {
-        btnBuy.onclick = () => {
+        btnBuy.onclick = createActionGuard(() => {
           // 1. Potong saldo
-          economyManager.deductMoney(
-            player.id,
-            prop.price,
-            `Membeli properti ${prop.name} seharga $${prop.price}`,
-            TransactionType.BUY_PROP
-          );
+          const purchase = propertyManager.purchaseProperty(prop.pos, player.id);
+          if (!purchase.success) {
+            toast(`⚠️ ${purchase.reason}`);
+            return;
+          }
 
           // 2. Set kepemilikan
-          propertyManager.setOwner(prop.pos, player.id);
-
-          toast(`🎉 ${player.name} berhasil membeli ${prop.name}!`);
           buildHud();
 
           this.close();
           resolve({ action: 'BUY', player, prop });
-        };
+        });
       }
 
       if (btnAuction) {
-        btnAuction.onclick = () => {
+        btnAuction.onclick = createActionGuard(() => {
           this.close();
           // Lanjut ke sistem lelang
           setTimeout(() => {
@@ -255,9 +407,118 @@ export class TileModalManager {
               resolve({ action: 'AUCTION', result: auctionRes });
             });
           }, 240);
-        };
+        });
       }
     });
+  }
+
+  showAuthoritativeAuction(auction, {localPlayerId, onAction, minimumBid, quickBids} = {}) {
+    if (!auction?.auctionId || !Array.isArray(auction.activeBidders)) return false;
+    this.authoritativeAuctionId = auction.auctionId;
+    const activeId = auction.currentBidderId;
+    const isMyTurn = isLocalAuctionBidder(auction, localPlayerId);
+    const property = clientGameStore.getProperty(auction.propertyPos);
+    const format = value => `$${Number(value || 0).toLocaleString('id-ID')}`;
+    const minBid = Number.isSafeInteger(minimumBid) ? minimumBid : (auction.highestBidderId ? auction.highestBid + 1 : 1);
+    const suggestions = Array.isArray(quickBids) ? quickBids : [minBid];
+    const activeIds = new Set(auction.activeBidders.map(player => player.playerId));
+    const participants = Array.isArray(auction.participants) ? auction.participants : auction.activeBidders;
+    const participantNames = participants.map(player => {
+      const active = activeIds.has(player.playerId);
+      const leader = player.playerId === auction.highestBidderId;
+      const label = active ? (leader ? 'Penawar tertinggi' : 'Aktif') : 'PASS';
+      return `<span class="auction-player-chip ${active ? 'active' : 'passed'}" title="${label}">${escapeHtml(player.name)}${leader ? ' ★' : ''}${active ? '' : ' · PASS'}</span>`;
+    }).join('');
+    const currentBidder = auction.activeBidders.find(player => player.playerId === activeId);
+    const passedCount = Math.max(0, participants.length - auction.activeBidders.length);
+    const actions = isMyTurn
+      ? `<div class="auction-controls">
+          <div class="auction-bid-buttons">${suggestions.map((amount, index) => `<button type="button" class="btn-bid-step" data-bid="${amount}" ${currentBidder?.money < amount ? 'disabled' : ''}>Tawar ${format(amount)}${index === 0 && auction.highestBidderId ? ' (+10)' : ''}</button>`).join('')}</div>
+          <div class="auction-custom-bid"><label for="authoritative-auction-bid">Nominal khusus (min. ${format(minBid)})</label>
+            <input id="authoritative-auction-bid" type="number" inputmode="numeric" min="${minBid}" step="1" placeholder="Masukkan tawaran">
+            <button id="authoritative-auction-submit" class="btn-primary-action">Tawar nominal</button></div>
+          <button id="authoritative-auction-pass" class="btn-pass-action">PASS (Lewati lelang)</button>
+        </div>`
+      : `<div class="chance-effect-badge auction-waiting-turn">Menunggu ${escapeHtml(auction.activeBidders.find(player => player.playerId === activeId)?.name || 'pemain')} menawar</div>`;
+    const html = `<div class="tile-modal-card auction-card">
+      <div class="tile-modal-top-bar" style="background:${COL[property?.group] || '#334155'}">
+        <div class="tile-modal-top-info"><span>⚖️ LELANG PROPERTI</span><span class="top-bar-sub">Harga asli: ${format(auction.propertyPrice)} · ${auction.activeBidders.length} penawar aktif · ${passedCount} PASS</span></div>
+        <button type="button" class="btn-tile-minimize" title="Perkecil modal" aria-label="Minimize"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="2.5" y1="8" x2="13.5" y2="8"/></svg></button>
+      </div><div class="tile-modal-body">
+        <h3 class="tile-prop-title">${escapeHtml(auction.propertyName)}</h3>
+        <div class="tile-details-box"><div class="modal-detail-row"><span>Tawaran tertinggi</span><b>${format(auction.highestBid)}</b></div>
+          <div class="modal-detail-row"><span>Penawar tertinggi</span><b>${escapeHtml(auction.highestBidder?.name || 'Belum ada')}</b></div>
+          <div class="modal-detail-row"><span>Giliran lelang</span><b>${escapeHtml(currentBidder?.name || '—')}</b></div>
+          <div class="modal-detail-row"><span>Tawaran minimum berikutnya</span><b>${format(minBid)}</b></div></div>
+        <div class="auction-participants-info">Peserta: ${participantNames}</div>
+        ${currentBidder && isMyTurn ? `<div class="bidder-balance">Saldo Anda: <b>${format(currentBidder.money)}</b></div>` : ''}${actions}
+      </div></div>`;
+    this._showContent(html, `Lelang: ${auction.propertyName}`);
+    const submit = document.getElementById('authoritative-auction-submit');
+    const pass = document.getElementById('authoritative-auction-pass');
+    const input = document.getElementById('authoritative-auction-bid');
+    let actionPending = false;
+    const setControlsDisabled = disabled => {
+      this.overlay?.querySelectorAll('.auction-controls button, .auction-controls input').forEach(control => { control.disabled = disabled; });
+    };
+    const sendAuctionAction = async (action, amount = null) => {
+      if (actionPending) return false;
+      actionPending = true;
+      setControlsDisabled(true);
+      let response;
+      try {
+        response = await onAction?.(action, amount, auction);
+      } catch (error) {
+        response = {ok: false, error: {message: error?.message || 'Koneksi lelang terputus.'}};
+      }
+      if (!response?.ok) {
+        toast(response?.error?.message || 'Tawaran tidak dapat diproses.');
+        if (this.authoritativeAuctionId === auction.auctionId) {
+          this.showAuthoritativeAuction(clientGameStore.activeAuction?.auctionId === auction.auctionId ? clientGameStore.activeAuction : auction,
+            {localPlayerId, onAction, minimumBid, quickBids});
+        }
+        return false;
+      }
+      return true;
+    };
+    this.overlay?.querySelectorAll('.btn-bid-step').forEach(button => {
+      button.onclick = createActionGuard(() => sendAuctionAction('BID', Number(button.dataset.bid)));
+    });
+    if (submit) submit.onclick = createActionGuard(async () => {
+      const amount = parseCustomAuctionBid(input?.value, minBid);
+      if (amount === null) { toast(`Masukkan nominal bulat minimal ${format(minBid)}.`); return false; }
+      return sendAuctionAction('BID', amount);
+    });
+    if (input) input.onkeydown = event => {
+      if (event.key === 'Enter' && submit && !submit.disabled) submit.click();
+    };
+    if (pass) pass.onclick = createActionGuard(() => sendAuctionAction('PASS'));
+    return true;
+  }
+
+  showAuthoritativeAuctionResult(result) {
+    if (!result?.auctionId || this.authoritativeAuctionId !== result.auctionId) return false;
+    const winner = result.winner;
+    const status = winner ? `${escapeHtml(winner.name)} memenangkan ${escapeHtml(result.property?.name)}.` : 'Tidak ada pemain yang menawar. Properti tetap milik Bank.';
+    const html = `<div class="tile-modal-card auction-card finish"><div class="tile-modal-top-bar" style="background:#334155"><div class="tile-modal-top-info"><span>LELANG SELESAI</span><span class="top-bar-sub">Hasil resmi server</span></div></div><div class="tile-modal-body text-center"><div class="finish-icon">${winner ? '🏆' : '🏛️'}</div><h3 class="tile-prop-title">${winner ? 'Lelang dimenangkan' : 'Properti tidak terjual'}</h3><p class="finish-desc">${status}</p>${winner ? `<div class="finish-price-tag">Harga akhir: <b>${formatAuctionMoney(result.amount)}</b></div>` : ''}<div class="tile-details-box">${(result.balances || []).map(item => {
+      const player = clientGameStore.getPlayer(item.playerId);
+      return `<div class="modal-detail-row"><span>Saldo ${escapeHtml(player?.name || '')}</span><b>${formatAuctionMoney(item.money)}</b></div>`;
+    }).join('')}</div></div></div>`;
+    this._showContent(html, `Hasil lelang: ${result.property?.name || 'Properti'}`);
+    const auctionId = result.auctionId;
+    setTimeout(() => {
+      if (this.authoritativeAuctionId !== auctionId) return;
+      this.authoritativeAuctionId = null;
+      this.close();
+    }, 2400);
+    return true;
+  }
+
+  closeAuthoritativeAuction(auctionId) {
+    if (this.authoritativeAuctionId !== auctionId) return false;
+    this.authoritativeAuctionId = null;
+    this.close();
+    return true;
   }
 
   // ========================================================
@@ -367,31 +628,31 @@ export class TileModalManager {
 
     // Bind event tombol tawaran
     this.overlay.querySelectorAll('.btn-bid-step').forEach(btn => {
-      btn.onclick = () => {
+      btn.onclick = createActionGuard(() => {
         const val = Number(btn.dataset.bid);
-        auctionManager.placeBid(val);
+        auctionManager.placeBid(val, currentBidder?.id ?? null);
         this._renderAuctionRoom();
-      };
+      });
     });
 
     const btnPass = document.getElementById('btn-auction-pass');
     if (btnPass) {
-      btnPass.onclick = () => {
-        auctionManager.pass();
+      btnPass.onclick = createActionGuard(() => {
+        auctionManager.pass(currentBidder?.id ?? null);
         this._renderAuctionRoom();
-      };
+      });
     }
 
     const btnCustom = document.getElementById('btn-auction-custom');
     const inputCustom = document.getElementById('auction-custom-input');
     if (btnCustom && inputCustom) {
-      btnCustom.onclick = () => {
+      btnCustom.onclick = createActionGuard(() => {
         const val = Number(inputCustom.value);
         if (!val || val < 1) { toast('⚠️ Masukkan nominal tawaran yang valid.'); return; }
-        const res = auctionManager.placeBid(val);
+        const res = auctionManager.placeBid(val, currentBidder?.id ?? null);
         if (!res) toast('⚠️ Tawaran tidak valid. Harus lebih tinggi dari tawaran saat ini atau saldo tidak cukup.');
         this._renderAuctionRoom();
-      };
+      });
     }
   }
 
@@ -418,7 +679,6 @@ export class TileModalManager {
         const paid = economyManager.transferMoney(tenant.id, owner.id, rentAmount,
           `Bayar sewa ${prop.name}`, TransactionType.RENT);
         if (paid) {
-          toast(`💸 ${tenant.name} membayar sewa $${rentAmount.toLocaleString('id-ID')} ke ${owner.name}`);
           buildHud();
           resolve({ tenant, owner, rentAmount, bankrupt: false });
         } else resolve({ tenant, owner, rentAmount: 0, bankrupt: true });
@@ -494,7 +754,7 @@ export class TileModalManager {
 
       const btnPay = document.getElementById('btn-pay-rent');
       if (btnPay) {
-        btnPay.onclick = async () => {
+        btnPay.onclick = createActionGuard(async () => {
           if (tenant.money < rentAmount) {
             this.close();
             setTimeout(async () => {
@@ -506,14 +766,18 @@ export class TileModalManager {
               );
 
               if (debtRes.resolved) {
-                economyManager.transferMoney(
+                const paid = economyManager.transferMoney(
                   tenant.id,
                   owner.id,
                   rentAmount,
                   `Bayar sewa ${prop.name}`,
                   TransactionType.RENT
                 );
-                toast(`💸 ${tenant.name} berhasil melunasi sewa $${rentAmount.toLocaleString('id-ID')} ke ${owner.name}`);
+                if (!paid) {
+                  toast(`⚠️ Saldo masih belum cukup untuk membayar sewa ${prop.name}.`);
+                  resolve({ tenant, owner, rentAmount: 0, bankrupt: true });
+                  return;
+                }
                 buildHud();
                 resolve({ tenant, owner, rentAmount, bankrupt: false });
               } else {
@@ -524,20 +788,23 @@ export class TileModalManager {
           }
 
           // Transfer uang normal via EconomyManager
-          economyManager.transferMoney(
+          const paid = economyManager.transferMoney(
             tenant.id,
             owner.id,
             rentAmount,
             `Bayar sewa ${prop.name}`,
             TransactionType.RENT
           );
+          if (!paid) {
+            toast(`⚠️ Pembayaran sewa ${prop.name} gagal.`);
+            return false;
+          }
 
-          toast(`💸 ${tenant.name} membayar sewa $${rentAmount.toLocaleString('id-ID')} ke ${owner.name}`);
           buildHud();
 
           this.close();
           resolve({ tenant, owner, rentAmount, bankrupt: false });
-        };
+        });
       }
     });
   }
@@ -599,7 +866,7 @@ export class TileModalManager {
 
       const btnOk = document.getElementById('btn-chance-ok');
       if (btnOk) {
-        btnOk.onclick = async () => {
+        btnOk.onclick = createActionGuard(async () => {
           this.close();
 
           // 1. Uang Masuk
@@ -657,7 +924,7 @@ export class TileModalManager {
           }
           // 5. Bayar ke Setiap Pemain
           else if (card.type === 'PAY_EACH_PLAYER') {
-            const opponents = gameState.players.filter(p => p.id !== player.id && p.status === PlayerStatus.ACTIVE);
+            const opponents = clientGameStore.getPlayers().filter(p => p.id !== player.id && p.status === PlayerStatus.ACTIVE);
             const totalCost = opponents.length * card.amount;
 
             if (player.money < totalCost) {
@@ -678,7 +945,7 @@ export class TileModalManager {
           }
           // 6. Terima dari Setiap Pemain
           else if (card.type === 'COLLECT_FROM_EACH_PLAYER') {
-            const opponents = gameState.players.filter(p => p.id !== player.id && p.status === PlayerStatus.ACTIVE);
+            const opponents = clientGameStore.getPlayers().filter(p => p.id !== player.id && p.status === PlayerStatus.ACTIVE);
             let totalReceived = 0;
             opponents.forEach(op => {
               const pay = Math.min(op.money, card.amount);
@@ -732,7 +999,7 @@ export class TileModalManager {
           } else {
             resolve(card);
           }
-        };
+        });
       }
     });
   }

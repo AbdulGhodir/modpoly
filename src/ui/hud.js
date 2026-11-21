@@ -1,24 +1,41 @@
-﻿import {PLAYERS, GAME, gameState} from '../data/players.js';
+import {clientGameStore} from '../state/ClientGameStore.js';
 import {modalManager} from './ModalManager.js';
 import {tileModalManager} from './TileModalManager.js';
+import {canShowPlayerActionMenu} from './multiplayerTurnControls.js';
+
+let multiplayerContext = null;
+
+export function setHudMultiplayerContext(context) {
+ multiplayerContext = context;
+ context?.client?.onStatusChange?.(() => buildHud());
+ buildHud();
+}
 
 export function buildHud(){
  if (typeof document === 'undefined') return;
  const hudEl = document.getElementById('hud');
  if (!hudEl) return;
- const cur=gameState.getActivePlayer() || PLAYERS[GAME.turn];
- hudEl.innerHTML=PLAYERS.map((p,i)=>{
-  const isActive=(i===gameState.currentTurn);
+ const players=clientGameStore.getPlayers();
+ const cur=clientGameStore.getActivePlayer() || players[clientGameStore.getCurrentTurn()];
+ hudEl.innerHTML=players.map((p,i)=>{
+  const isActive=(i===clientGameStore.getCurrentTurn());
   const isBankrupt=(p.status==='BANKRUPT');
   const isInJail=(p.status==='IN_JAIL'||p.inJail===true);
-  const actionBtn=isActive && !isBankrupt ?`<button class="btn-action-trigger" id="btn-player-action" title="Buka menu tindakan pemain">📋 AKSI PEMAIN</button>`:'';
+  const room=multiplayerContext?.getActiveRoom?.();
+  const multiplayer=room?.status==='started';
+  const localPlayerId=multiplayerContext?.getLocalPlayerId?.();
+  const allowed=multiplayer
+   ? p.playerId===localPlayerId && canShowPlayerActionMenu({state:clientGameStore.getState(),store:clientGameStore,
+      room,localPlayerId,connected:multiplayerContext?.client?.isConnected?.()===true})
+   : isActive && !isBankrupt;
+  const actionBtn=allowed ?`<button class="btn-action-trigger" id="btn-player-action" title="Buka menu tindakan pemain">📋 AKSI PEMAIN</button>`:'';
   return `
    <div class="pl p${p.id}${isActive?' on':''}${isBankrupt?' bankrupt':''}${isInJail?' in-jail':''}" style="--c:${p.color};--d:${p.dark}">
     <i class="av">${isInJail?'<span class="av-jail-icon">🔒</span>':''}</i>
     <div>
      <b>${p.name} ${isBankrupt ? '<span class="bankrupt-tag">BANGKRUT</span>' : ''}</b>
      <small>${p.cn}</small>
-     <span>💰 $${p.money.toLocaleString('id-ID')}</span>
+     <span>💰 $${clientGameStore.getDisplayedBalance(p.playerId)?.toLocaleString('id-ID') ?? p.money.toLocaleString('id-ID')}</span>
      ${actionBtn}
     </div>
     <em>${p.id}</em>
@@ -26,7 +43,7 @@ export function buildHud(){
   `;
  }).join('');
 
- document.getElementById('rd').textContent=gameState.round;
+ document.getElementById('rd').textContent=clientGameStore.getRound();
  const tn=document.getElementById('tn');
  if(tn && cur){
   tn.textContent=cur.name;
@@ -37,6 +54,12 @@ export function buildHud(){
  if(actionBtn){
   actionBtn.onclick=(e)=>{
    e.stopPropagation();
+   const room=multiplayerContext?.getActiveRoom?.();
+   if(room?.status==='started' && !canShowPlayerActionMenu({state:clientGameStore.getState(),store:clientGameStore,
+    room,localPlayerId:multiplayerContext?.getLocalPlayerId?.(),connected:multiplayerContext?.client?.isConnected?.()===true})){
+    buildHud();
+    return;
+   }
    // Cegah buka modal jika popup wajib petak (beli/lelang/sewa) sedang aktif
    if(tileModalManager.isOpen()){
     toast('Selesaikan proses petak saat ini terlebih dahulu!');
@@ -48,6 +71,7 @@ export function buildHud(){
 }
 
 let tm;
+const moneyPopupSlots = new Map();
 export function toast(m){
  if (typeof document === 'undefined') return;
  const t=document.getElementById('toast');
@@ -60,7 +84,7 @@ export function toast(m){
 
 export function showMoneyPopup(playerIdx, amount){
  if (typeof document === 'undefined') return;
- const p=PLAYERS[playerIdx];
+ const p=clientGameStore.getPlayerAtIndex(playerIdx);
  if(!p || !amount)return;
  const plEl=document.querySelector(`.pl.p${p.id}`);
  if(!plEl)return;
@@ -71,23 +95,31 @@ export function showMoneyPopup(playerIdx, amount){
  const posClass=p.id<=2?'pos-bottom':'pos-top';
  pop.className=`money-pop ${isPositive?'plus':'minus'} ${posClass}`;
  pop.textContent=(isPositive?'+$':'-$')+Math.abs(amount).toLocaleString('id-ID');
+ const slots=moneyPopupSlots.get(p.id) || new Set();
+ let slot=0;
+ while(slots.has(slot)) slot++;
+ slots.add(slot);
+ moneyPopupSlots.set(p.id,slots);
 
  // Posisi fixed di viewport agar tidak terhapus saat HUD di-rebuild
  pop.style.left=(rect.left + rect.width / 2)+'px';
  if(p.id<=2){
-  pop.style.top=(rect.bottom + 8)+'px';
+  pop.style.top=(rect.bottom + 8 + slot*30)+'px';
  }else{
-  pop.style.top=(rect.top - 8)+'px';
+  pop.style.top=(rect.top - 8 - slot*30)+'px';
  }
 
  document.body.appendChild(pop);
- setTimeout(()=>pop.remove(),1800);
+ setTimeout(()=>{pop.remove();slots.delete(slot);if(!slots.size)moneyPopupSlots.delete(p.id)},1800);
 }
 
-function animateRentTransfer(fromPlayerId, toPlayerId, amount){
+export function animateRentTransfer(fromPlayerId, toPlayerId, amount){
  if(typeof document==='undefined' || !amount || !document.body.animate) return;
- const from=document.querySelector(`.pl.p${fromPlayerId}`)?.getBoundingClientRect();
- const to=document.querySelector(`.pl.p${toPlayerId}`)?.getBoundingClientRect();
+ const findPlayer=id=>clientGameStore.getPlayer(id) || clientGameStore.getPlayers().find(player=>player.id===id);
+ const fromPlayer=findPlayer(fromPlayerId), toPlayer=findPlayer(toPlayerId);
+ if(!fromPlayer || !toPlayer) return;
+ const from=document.querySelector(`.pl.p${fromPlayer.id}`)?.getBoundingClientRect();
+ const to=document.querySelector(`.pl.p${toPlayer.id}`)?.getBoundingClientRect();
  if(!from || !to) return;
  const icon=document.createElement('div');
  icon.className='rent-transfer-fly';
@@ -117,21 +149,19 @@ if (typeof window !== 'undefined') {
   const detail=e.detail||{};
   if(detail.type==='RENT' && detail.fromPlayerId && detail.toPlayerId)
    animateRentTransfer(detail.fromPlayerId,detail.toPlayerId,detail.amount);
-  buildHud();
   const {playerId, amount, fromPlayerId, toPlayerId} = e.detail || {};
   if(playerId && amount){
-   const pIdx=PLAYERS.findIndex(p=>p.id===playerId);
+   const pIdx=clientGameStore.getPlayerIndex(playerId);
    if(pIdx!==-1) showMoneyPopup(pIdx, amount);
   }else if(fromPlayerId && toPlayerId && amount){
-   const fromIdx=PLAYERS.findIndex(p=>p.id===fromPlayerId);
-   const toIdx=PLAYERS.findIndex(p=>p.id===toPlayerId);
+   const fromIdx=clientGameStore.getPlayerIndex(fromPlayerId);
+   const toIdx=clientGameStore.getPlayerIndex(toPlayerId);
    if(fromIdx!==-1) showMoneyPopup(fromIdx, -amount);
    if(toIdx!==-1) showMoneyPopup(toIdx, amount);
   }
  });
 
- window.addEventListener('phase:changed',()=>buildHud());
- window.addEventListener('turn:ready',()=>buildHud());
 }
 
+clientGameStore.subscribe(() => buildHud());
 buildHud();

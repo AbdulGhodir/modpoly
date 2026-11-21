@@ -4,6 +4,13 @@ import {propertyManager} from './PropertyManager.js';
 import {toast, buildHud} from '../ui/hud.js';
 
 export class TradeManager {
+  constructor(state = gameState, economy = economyManager, properties = propertyManager) {
+    this.state = state;
+    this.economy = economy;
+    this.properties = properties;
+    this.executedOffers = new WeakSet();
+  }
+
   validateTrade({
     fromPlayerId,
     toPlayerId,
@@ -14,8 +21,8 @@ export class TradeManager {
     giveJailCards = 0,
     receiveJailCards = 0
   }) {
-    const fromPlayer = gameState.getPlayerById(fromPlayerId);
-    const toPlayer = gameState.getPlayerById(toPlayerId);
+    const fromPlayer = this.state.getPlayerById(fromPlayerId);
+    const toPlayer = this.state.getPlayerById(toPlayerId);
 
     if (!fromPlayer || !toPlayer) {
       return { valid: false, reason: 'Pemain tidak ditemukan.' };
@@ -25,7 +32,7 @@ export class TradeManager {
       return { valid: false, reason: 'Tidak dapat berdagang dengan diri sendiri.' };
     }
 
-    if (gameState.gameStatus === GameStatus.FINISHED) {
+    if (this.state.gameStatus === GameStatus.FINISHED) {
       return { valid: false, reason: 'Permainan telah selesai. Tidak dapat berdagang.' };
     }
 
@@ -53,7 +60,7 @@ export class TradeManager {
 
     // Validasi properti yang diberikan oleh fromPlayer
     for (const pos of givePropPositions) {
-      const prop = propertyManager.getProperty(pos);
+      const prop = this.properties.getProperty(pos);
       if (!prop || prop.owner !== fromPlayer.id) {
         return { valid: false, reason: `Properti ${prop ? prop.name : pos} bukan milik ${fromPlayer.name}.` };
       }
@@ -61,7 +68,7 @@ export class TradeManager {
         return { valid: false, reason: `Properti ${prop.name} masih memiliki bangunan. Jual seluruh bangunan terlebih dahulu.` };
       }
       if (prop.type === 'prop') {
-        const groupProps = propertyManager.getColorGroupProperties(prop.group);
+        const groupProps = this.properties.getColorGroupProperties(prop.group);
         if (groupProps.some(p => p.houses > 0 || p.hasHotel)) {
           return { valid: false, reason: `Kelompok warna ${prop.group} masih memiliki bangunan di kota lain. Jual semua bangunan terlebih dahulu.` };
         }
@@ -70,7 +77,7 @@ export class TradeManager {
 
     // Validasi properti yang diminta dari toPlayer
     for (const pos of receivePropPositions) {
-      const prop = propertyManager.getProperty(pos);
+      const prop = this.properties.getProperty(pos);
       if (!prop || prop.owner !== toPlayer.id) {
         return { valid: false, reason: `Properti ${prop ? prop.name : pos} bukan milik ${toPlayer.name}.` };
       }
@@ -78,7 +85,7 @@ export class TradeManager {
         return { valid: false, reason: `Properti ${prop.name} masih memiliki bangunan. Jual seluruh bangunan terlebih dahulu.` };
       }
       if (prop.type === 'prop') {
-        const groupProps = propertyManager.getColorGroupProperties(prop.group);
+        const groupProps = this.properties.getColorGroupProperties(prop.group);
         if (groupProps.some(p => p.houses > 0 || p.hasHotel)) {
           return { valid: false, reason: `Kelompok warna ${prop.group} masih memiliki bangunan di kota lain. Jual semua bangunan terlebih dahulu.` };
         }
@@ -89,6 +96,9 @@ export class TradeManager {
   }
 
   executeTrade(tradeOffer) {
+    if (tradeOffer && typeof tradeOffer === 'object' && this.executedOffers.has(tradeOffer)) {
+      return { success: false, reason: 'Tawaran ini sudah pernah diproses.' };
+    }
     const check = this.validateTrade(tradeOffer);
     if (!check.valid) {
       return { success: false, reason: check.reason };
@@ -105,13 +115,13 @@ export class TradeManager {
       receiveJailCards = 0
     } = tradeOffer;
 
-    const fromPlayer = gameState.getPlayerById(fromPlayerId);
-    const toPlayer = gameState.getPlayerById(toPlayerId);
+    const fromPlayer = this.state.getPlayerById(fromPlayerId);
+    const toPlayer = this.state.getPlayerById(toPlayerId);
 
     // EKSEKUSI ATOMIK:
     // 1. Transfer Uang
     if (giveMoney > 0) {
-      economyManager.transferMoney(
+      this.economy.transferMoney(
         fromPlayer.id,
         toPlayer.id,
         giveMoney,
@@ -121,7 +131,7 @@ export class TradeManager {
     }
 
     if (receiveMoney > 0) {
-      economyManager.transferMoney(
+      this.economy.transferMoney(
         toPlayer.id,
         fromPlayer.id,
         receiveMoney,
@@ -138,11 +148,11 @@ export class TradeManager {
 
     // 3. Transfer Properti
     givePropPositions.forEach(pos => {
-      propertyManager.setOwner(pos, toPlayer.id);
+      this.properties.setOwner(pos, toPlayer.id);
     });
 
     receivePropPositions.forEach(pos => {
-      propertyManager.setOwner(pos, fromPlayer.id);
+      this.properties.setOwner(pos, fromPlayer.id);
     });
 
     toast(`🤝 Kesepakatan perdagangan antara ${fromPlayer.name} dan ${toPlayer.name} berhasil diselesaikan!`);
@@ -153,6 +163,8 @@ export class TradeManager {
         detail: { tradeOffer, fromPlayer, toPlayer }
       }));
     }
+
+    this.executedOffers.add(tradeOffer);
 
     return {
       success: true,
