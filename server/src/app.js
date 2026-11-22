@@ -41,6 +41,11 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
   rateLimits = serverConfig.rateLimits, maxSocketMessageBytes = serverConfig.maxSocketMessageBytes} = {}) {
   const app = express();
   app.disable('x-powered-by');
+  // Beberapa platform hosting mengecek kesehatan lewat GET / ; balas 200 supaya dianggap sehat.
+  app.get('/', (_request, response) => {
+    response.type('text/plain').send('ModPoly backend OK');
+  });
+
   app.get('/health', (_request, response) => {
     // instanceId berubah tiap proses start. Kalau dipanggil berkali-kali hasilnya berganti-ganti,
     // berarti ada lebih dari 1 instance di belakang load balancer (rooms tersimpan di memori tiap instance).

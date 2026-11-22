@@ -1,4 +1,8 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import {fileURLToPath} from 'node:url';
+
+// Muat server/.env di mana pun perintah dijalankan (root repo atau folder server).
+dotenv.config({path: fileURLToPath(new URL('../.env', import.meta.url))});
 
 const parsedPort = Number(process.env.PORT || 3000);
 const parsedSessionGracePeriod = Number(process.env.SESSION_GRACE_PERIOD_MS || 15 * 60 * 1000);
