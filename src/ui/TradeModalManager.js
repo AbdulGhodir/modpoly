@@ -96,9 +96,9 @@ export class TradeModalManager {
 
     // Cari daftar calon partner dagang (pemain yang belum bangkrut)
     const player1Identity = this._tradePlayerId(player1);
-    const partners = clientGameStore.getPlayers().filter(p => this._tradePlayerId(p) !== player1Identity && p.status !== PlayerStatus.BANKRUPT);
+    const partners = clientGameStore.getPlayers().filter(p => this._tradePlayerId(p) !== player1Identity && p.status !== PlayerStatus.BANKRUPT && !p.isBot);
     if (partners.length === 0) {
-      toast('❌ Tidak ada pemain lain yang aktif untuk diajak barter/tukar.');
+      toast('❌ Tidak ada pemain manusia lain untuk diajak barter/tukar (bot tidak menerima tukar aset).');
       return;
     }
 

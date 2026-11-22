@@ -559,7 +559,7 @@ export class TileModalManager {
     const minNextBid = highestBidder ? highestBid + 10 : highestBid;
 
     const html = `
-      <div class="tile-modal-card auction-card">
+      <div class="tile-modal-card auction-card${currentBidder?.isBot ? ' bot-turn' : ''}">
         <div class="tile-modal-top-bar" style="background:${colorBar}">
           <div class="tile-modal-top-info">
             <span>⚖️ BALAI LELANG PROPERTI</span>
@@ -589,6 +589,7 @@ export class TileModalManager {
             <div class="bidder-balance">
               Saldo: <b>$${currentBidder ? currentBidder.money.toLocaleString('id-ID') : 0}</b>
             </div>
+            ${currentBidder?.isBot ? '<div class="bot-thinking">🤖 Bot sedang menimbang tawaran…</div>' : ''}
           </div>
 
           <!-- Opsi Penawaran Tambahan -->

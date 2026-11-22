@@ -27,7 +27,7 @@ export function buildHud(){
   const allowed=multiplayer
    ? p.playerId===localPlayerId && canShowPlayerActionMenu({state:clientGameStore.getState(),store:clientGameStore,
       room,localPlayerId,connected:multiplayerContext?.client?.isConnected?.()===true})
-   : isActive && !isBankrupt;
+   : isActive && !isBankrupt && !p.isBot;
   const actionBtn=allowed ?`<button class="btn-action-trigger" id="btn-player-action" title="Buka menu tindakan pemain">📋 AKSI PEMAIN</button>`:'';
   return `
    <div class="pl p${p.id}${isActive?' on':''}${isBankrupt?' bankrupt':''}${isInJail?' in-jail':''}" style="--c:${p.color};--d:${p.dark}">

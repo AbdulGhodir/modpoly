@@ -41,22 +41,22 @@ import {configureLocalGame} from './logic/localGame.js';
 import {turnManager} from './logic/TurnManager.js';
 import {buildHud} from './ui/hud.js';
 import {TILES} from './data/tiles.js';
+import {initBootScreen} from './ui/bootScreen.js';
+import {initLocalBots} from './logic/LocalBotController.js';
 
 configureLocalGame({ turnManager, buildHud, toast, tiles: TILES });
 
 const rotateHint = document.getElementById('rotate-hint');
 const rotateOk = document.getElementById('rotate-ok');
-window.addEventListener('game:ready', () => {
-  document.body.classList.remove('app-loading');
-  document.body.classList.add('app-ready');
-  window.setTimeout(() => document.getElementById('boot-screen')?.remove(), 350);
-}, {once: true});
 if (rotateHint && rotateOk) {
   rotateOk.onclick = () => rotateHint.classList.add('dismissed');
 }
 
 clientGameStore.bindEvents(window);
 const lobby = initLobby();
+initLocalBots();
+const bootScreen = initBootScreen({client: socketClient, openLocal: () => lobby.open('local')});
+window.addEventListener('game:ready', () => bootScreen.boardReady(), {once: true});
 const multiplayerContext = {client: socketClient, getActiveRoom: () => lobby.getRoomState(), getLocalPlayerId: () => lobby.playerId};
 setHudMultiplayerContext(multiplayerContext);
 modalManager.setMultiplayerContext(multiplayerContext);
@@ -116,7 +116,22 @@ initDice({
 // Banner "putar layar" (portrait HP) – bisa ditutup, tidak memblokir game
 document.getElementById('rotate-ok')?.addEventListener('click',()=>document.getElementById('rotate-hint')?.classList.add('dismissed'));
 
-Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,1200))]).catch(()=>{}).then(()=>{
+// Tunggu font Fredoka (maks 2,5 dtk) supaya teks papan tidak memakai font cadangan.
+// Font dimuat non-blocking di index.html, jadi halaman tidak lagi putih menunggu Google Fonts.
+function waitForFonts() {
+  const fontLink = document.getElementById('gfonts-css');
+  const stylesheetReady = new Promise(resolve => {
+    if (!fontLink || fontLink.sheet) return resolve();
+    fontLink.addEventListener('load', resolve, {once: true});
+    fontLink.addEventListener('error', resolve, {once: true});
+  });
+  const fontsLoaded = stylesheetReady.then(() => document.fonts
+    ? Promise.all(['500', '600', '700'].map(weight => document.fonts.load(`${weight} 16px Fredoka`))) : null);
+  return Promise.race([fontsLoaded, new Promise(resolve => setTimeout(resolve, 2500))]).catch(() => {});
+}
+
+waitForFonts().then(()=>{
+  try {
   const vp=measureViewport();
   // Canvas dibuat sebesar piksel FISIK (w*DPR) lalu ditampilkan 1/DPR via zoom → tidak ada upscale blur.
   const game=new Phaser.Game({
@@ -147,4 +162,8 @@ Promise.race([document.fonts.ready,new Promise(r=>setTimeout(r,1200))]).catch(()
   window.visualViewport?.addEventListener('resize',schedule);
   screen.orientation?.addEventListener?.('change',()=>{schedule();setTimeout(schedule,350)});
   document.addEventListener('fullscreenchange',()=>{schedule();setTimeout(schedule,300)});
+  } catch (error) {
+    console.error('[boot] gagal membuat game', error);
+    window.__bootFail?.('Gagal menyiapkan papan permainan.');
+  }
 });

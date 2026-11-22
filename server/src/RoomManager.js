@@ -2,6 +2,9 @@ import {createHash, randomBytes, randomInt, randomUUID} from 'node:crypto';
 import {createServerGameState} from './game/ServerGameState.js';
 import {ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS} from './game/constants.js';
 import {hasOnlyKeys, isValidBoardPosition, isValidIdentifier, isValidTurnId} from './validation.js';
+import {loadBoardCatalog} from './game/loadBoardCatalog.js';
+import {chooseJailAction, decideAuctionAction, pickBuildAction, pickDebtStep, pickParkingDestination,
+  shouldBuyProperty} from '../../src/logic/botBrain.js';
 
 export {ROOM_MAX_PLAYERS, ROOM_MIN_PLAYERS} from './game/constants.js';
 const ROOM_CODE_LENGTH = 6;
@@ -10,12 +13,14 @@ export const DEFAULT_SESSION_GRACE_PERIOD_MS = 15 * 60 * 1000;
 
 const failure = (code, message) => ({ok: false, error: {code, message}});
 const success = data => ({ok: true, ...data});
+const MAX_BOT_STEP_FAILURES = 3;
+const humanPlayers = room => room.players.filter(player => !player.isBot);
 
 export class RoomManager {
   constructor({codeGenerator = () => this.generateRoomCode(), idGenerator = randomUUID, gameStateFactory = createServerGameState,
     diceRoller = () => [randomInt(1, 7), randomInt(1, 7)], movementIdGenerator = randomUUID,
     resolutionIdGenerator = randomUUID, sessionGracePeriodMs = DEFAULT_SESSION_GRACE_PERIOD_MS,
-    maxRooms = 500, disconnectAutomationDelayMs = 650,
+    maxRooms = 500, disconnectAutomationDelayMs = 650, botActionDelayMs = 1500,
     onRoomUpdated = () => {}, onAutoAction = () => {}} = {}) {
     this.rooms = new Map();
     this.socketMembership = new Map();
@@ -32,6 +37,9 @@ export class RoomManager {
     this.onAutoAction = onAutoAction;
     this.disconnectAutomationDelayMs = Number.isFinite(disconnectAutomationDelayMs)
       ? Math.max(0, Math.floor(disconnectAutomationDelayMs)) : 650;
+    this.botActionDelayMs = Number.isFinite(botActionDelayMs) ? Math.max(0, Math.floor(botActionDelayMs)) : 1500;
+    this.botStepFailures = new Map();
+    this.automationExtraDelay = new Map();
     this.disconnectAutomationTimers = new Map();
     this.disconnectJailRetryAttempts = new Map();
     this.sessionsByTokenHash = new Map();
@@ -48,27 +56,75 @@ export class RoomManager {
     this.disconnectAutomationTimers.delete(roomCode);
   }
 
+  // Bot dianggap "selalu dikendalikan server"; pemain manusia hanya jika sedang terputus.
+  _isAutomated(player) { return Boolean(player) && (player.isBot === true || !player.isConnected); }
+
   scheduleDisconnectedAutomation(roomCode) {
     const room = this.rooms.get(String(roomCode || '').toUpperCase());
     const game = room?.gameState;
     if (!room || room.status !== 'started' || !game || game.state.gameStatus !== 'IN_GAME') return false;
+    // Room berisi bot tapi tidak ada manusia yang terhubung: jeda, supaya bot tidak main sendiri selamanya.
+    if (room.players.some(player => player.isBot) && !humanPlayers(room).some(player => player.isConnected)) return false;
     const active = room.players.find(player => player.playerId === game.state.activePlayerId);
-    const activeOffline = active && !active.isConnected &&
-      ['WAITING_ROLL', 'PLAYER_ACTION', 'WAITING_PROPERTY_DECISION', 'CHANCE_PRESENTATION'].includes(game.state.phase);
+    const activePhases = ['WAITING_ROLL', 'PLAYER_ACTION', 'WAITING_PROPERTY_DECISION', 'CHANCE_PRESENTATION'];
+    const activeAutomated = this._isAutomated(active) &&
+      (activePhases.includes(game.state.phase) || (active.isBot && game.state.phase === 'DEBT_RESOLUTION'));
     const auction = game.activeAuction;
     const currentBidderId = auction?.activeBidderIds?.[auction.currentBidderIndex];
     const bidder = currentBidderId && room.players.find(player => player.playerId === currentBidderId);
-    const bidderOffline = bidder && !bidder.isConnected;
-    if (!activeOffline && !bidderOffline) return false;
+    const bidderAutomated = this._isAutomated(bidder);
+    if (!activeAutomated && !bidderAutomated) return false;
     if (this.disconnectAutomationTimers.has(room.roomCode)) return true;
+    const botActing = (activeAutomated && active.isBot) || (bidderAutomated && bidder.isBot);
+    const delay = botActing
+      ? this.botActionDelayMs + (this.automationExtraDelay.get(room.roomCode) || 0)
+      : this.disconnectAutomationDelayMs;
+    this.automationExtraDelay.delete(room.roomCode);
     const timer = setTimeout(() => {
       this.disconnectAutomationTimers.delete(room.roomCode);
       this._runDisconnectedAutomation(room.roomCode).catch(error => {
-        console.error(`[disconnect] auto action failed for ${room.roomCode}:`, error?.message || error);
+        console.error(`[automation] auto action failed for ${room.roomCode}:`, error?.message || error);
       });
-    }, this.disconnectAutomationDelayMs);
+    }, delay);
     timer.unref?.();
     this.disconnectAutomationTimers.set(room.roomCode, timer);
+    return true;
+  }
+
+  // Mencegah bot mengulang langkah yang terus ditolak server (supaya tidak loop tanpa akhir).
+  _botStepFailed(roomCode, key) {
+    const previous = this.botStepFailures.get(roomCode);
+    const count = previous?.key === key ? previous.count + 1 : 1;
+    this.botStepFailures.set(roomCode, {key, count});
+    if (count >= MAX_BOT_STEP_FAILURES) {
+      console.error(`[bot] langkah ${key} gagal ${count}x di ${roomCode}; otomatisasi dihentikan sementara.`);
+      return false;
+    }
+    this.scheduleDisconnectedAutomation(roomCode);
+    return false;
+  }
+
+  _automateAuctionTurn(room, game, emit) {
+    const auction = game.activeAuction;
+    const bidderId = auction?.activeBidderIds?.[auction.currentBidderIndex];
+    const bidder = room.players.find(item => item.playerId === bidderId);
+    if (!auction || !this._isAutomated(bidder)) return false;
+    const base = {playerId: bidderId, turnId: auction.turnId, auctionId: auction.auctionId};
+    const label = bidder.isBot ? 'bot' : 'disconnect';
+    let decision = {action: 'PASS'};
+    if (bidder.isBot) {
+      decision = decideAuctionAction({money: game.state.getPlayerById(bidderId)?.money ?? 0,
+        prop: game.state.properties.get(auction.propertyPos), highestBid: auction.highestBid,
+        props: [...game.state.properties.values()], meKey: bidderId});
+    }
+    let result = game.resolveAuctionAction({...base, actionId: `${label}-auction-${randomUUID()}`, action: decision.action,
+      ...(decision.action === 'BID' ? {bidAmount: decision.amount} : {})});
+    if (!result.ok && decision.action === 'BID') {
+      result = game.resolveAuctionAction({...base, actionId: `${label}-auction-${randomUUID()}`, action: 'PASS'});
+    }
+    if (!result.ok) return this._botStepFailed(room.roomCode, `auction:${auction.auctionId}`);
+    emit({type: 'auction', result: result.result});
+    this.scheduleDisconnectedAutomation(room.roomCode);
     return true;
   }
 
@@ -77,98 +133,144 @@ export class RoomManager {
     const game = room?.gameState;
     if (!room || room.status !== 'started' || !game || game.state.gameStatus !== 'IN_GAME') return false;
     const emit = event => { try { this.onAutoAction(roomCode, event); } catch (error) {
-      console.error(`[disconnect] unable to publish auto action for ${roomCode}:`, error?.message || error);
+      console.error(`[automation] unable to publish auto action for ${roomCode}:`, error?.message || error);
     }};
     const playerId = game.state.activePlayerId;
     const player = room.players.find(item => item.playerId === playerId);
     const turnId = game.state.turnId;
     const phase = game.state.phase;
-    if (!player || player.isConnected || !turnId) {
-      const auction = game.activeAuction;
-      const bidderId = auction?.activeBidderIds?.[auction.currentBidderIndex];
-      const bidder = room.players.find(item => item.playerId === bidderId);
-      if (bidder?.isConnected === false && auction) {
-        const passed = game.resolveAuctionAction({playerId: bidderId, turnId: auction.turnId,
-          auctionId: auction.auctionId, actionId: `disconnect-pass-${randomUUID()}`, action: 'PASS'});
-        if (passed.ok) emit({type: 'auction', result: passed.result});
-        this.scheduleDisconnectedAutomation(roomCode);
-        return passed.ok;
-      }
-      return false;
-    }
+
+    // Giliran menawar di lelang bisa dipegang bot/pemain terputus walau pemain aktif sedang online.
+    if (phase === 'WAITING_AUCTION_ACTION' && game.activeAuction) return this._automateAuctionTurn(room, game, emit);
+    if (!player || !this._isAutomated(player) || !turnId) return false;
+
+    const isBot = player.isBot === true;
+    const gamePlayer = game.state.getPlayerById(playerId);
+    const props = [...game.state.properties.values()];
+    const next = () => this.scheduleDisconnectedAutomation(roomCode);
 
     if (phase === 'WAITING_ROLL' && game.pendingFreeParkingDecision?.playerId === playerId) {
-      const stayed = game.resolveFreeParkingAction({playerId, turnId, actionId: `disconnect-parking-${randomUUID()}`, action: 'STAY'});
-      if (!stayed.ok) return false;
-      emit({type: 'free-parking', result: stayed.result});
-      this.scheduleDisconnectedAutomation(roomCode);
+      let request = {action: 'STAY'};
+      if (isBot) {
+        const targetPos = pickParkingDestination({money: gamePlayer.money, props, tiles: loadBoardCatalog().TILES, meKey: playerId});
+        if (targetPos !== null) request = {action: 'TRAVEL', targetPos, movementId: this.movementIdGenerator(),
+          resolutionId: this.resolutionIdGenerator()};
+      }
+      let res = game.resolveFreeParkingAction({playerId, turnId, actionId: `${isBot ? 'bot' : 'disconnect'}-parking-${randomUUID()}`, ...request});
+      if (!res.ok && request.action === 'TRAVEL') {
+        res = game.resolveFreeParkingAction({playerId, turnId, actionId: `bot-parking-${randomUUID()}`, action: 'STAY'});
+      }
+      if (!res.ok) return this._botStepFailed(roomCode, `parking:${turnId}`);
+      emit({type: 'free-parking', result: res.result});
+      const steps = res.result.movement?.steps;
+      if (steps) this.automationExtraDelay.set(roomCode, Math.min(4000, steps * 220));
+      next();
       return true;
     }
     if (phase === 'WAITING_PROPERTY_DECISION') {
       const pending = game.pendingResolution;
       if (!pending || pending.playerId !== playerId) return false;
-      const declined = game.skipPropertyOffer({playerId, turnId, resolutionId: pending.resolutionId});
-      if (declined.ok) emit({type: 'property', result: declined.result});
-      this.scheduleDisconnectedAutomation(roomCode);
-      return declined.ok;
-    }
-    if (phase === 'WAITING_AUCTION_ACTION') {
-      const auction = game.activeAuction;
-      const bidderId = auction?.activeBidderIds?.[auction.currentBidderIndex];
-      const bidder = room.players.find(item => item.playerId === bidderId);
-      if (bidder?.isConnected === false && auction) {
-        const passed = game.resolveAuctionAction({playerId: bidderId, turnId: auction.turnId,
-          auctionId: auction.auctionId, actionId: `disconnect-pass-${randomUUID()}`, action: 'PASS'});
-        if (passed.ok) emit({type: 'auction', result: passed.result});
-        this.scheduleDisconnectedAutomation(roomCode);
-        return passed.ok;
+      let res;
+      if (isBot) {
+        const buy = shouldBuyProperty({money: gamePlayer.money, prop: game.state.properties.get(pending.propertyPos), props, meKey: playerId});
+        res = game.respondToPropertyOffer({playerId, turnId, resolutionId: pending.resolutionId, decision: buy ? 'BUY' : 'DECLINE'});
+      } else {
+        res = game.skipPropertyOffer({playerId, turnId, resolutionId: pending.resolutionId});
       }
-      return false;
+      if (!res.ok) return this._botStepFailed(roomCode, `property:${pending.resolutionId}`);
+      emit({type: 'property', result: res.result});
+      next();
+      return true;
+    }
+    if (phase === 'DEBT_RESOLUTION') {
+      const debt = game.pendingDebt;
+      if (!isBot || !debt || debt.playerId !== playerId) return false;
+      const view = game._debtView();
+      const step = pickDebtStep({money: gamePlayer.money, amount: debt.amount, sellActions: view.sellActions,
+        mortgageActions: view.mortgageActions.map(item => ({propertyPos: item.propertyPos, amount: item.amount})),
+        canDeclareBankruptcy: view.canDeclareBankruptcy});
+      if (!step) return this._botStepFailed(roomCode, `debt:${debt.debtId}`);
+      const res = game.resolveDebtAction({playerId, turnId: debt.turnId, debtId: debt.debtId,
+        actionId: `bot-debt-${randomUUID()}`, action: step.action,
+        ...(step.propertyPos !== undefined ? {propertyPos: step.propertyPos} : {})});
+      if (!res.ok) return this._botStepFailed(roomCode, `debt:${debt.debtId}`);
+      emit({type: 'debt', result: res.result});
+      next();
+      return true;
     }
     if (phase === 'CHANCE_PRESENTATION') {
       const pending = game.pendingChancePresentation;
       if (!pending || pending.event.playerId !== playerId) return false;
       const continued = game.continueChancePresentation({playerId, turnId, resolutionId: pending.event.resolutionId,
-        presentationId: pending.presentationId, actionId: `disconnect-chance-${randomUUID()}`});
-      if (continued.ok) emit({type: 'chance-continue', result: continued.result});
-      this.scheduleDisconnectedAutomation(roomCode);
-      return continued.ok;
+        presentationId: pending.presentationId, actionId: `${isBot ? 'bot' : 'disconnect'}-chance-${randomUUID()}`});
+      if (!continued.ok) return isBot ? this._botStepFailed(roomCode, `chance:${pending.presentationId}`) : false;
+      emit({type: 'chance-continue', result: continued.result});
+      next();
+      return true;
     }
     if (phase === 'PLAYER_ACTION' && game.extraRollAvailable !== true) {
-      const ended = game.endTurn({playerId, turnId, actionId: `disconnect-end-${randomUUID()}`});
-      if (ended.ok) emit({type: 'turn-ended', result: ended.result});
-      this.scheduleDisconnectedAutomation(roomCode);
-      return ended.ok;
+      if (isBot && gamePlayer.status === 'ACTIVE') {
+        const build = pickBuildAction({money: gamePlayer.money, props, meKey: playerId,
+          bankHouses: game.state.bankHouses, bankHotels: game.state.bankHotels});
+        if (build) {
+          const built = game.resolveBuildingAction({playerId, turnId, actionId: `bot-build-${randomUUID()}`, ...build});
+          if (built.ok) {
+            emit({type: 'building', result: built.result});
+            next();
+            return true;
+          }
+        }
+      }
+      const ended = game.endTurn({playerId, turnId, actionId: `${isBot ? 'bot' : 'disconnect'}-end-${randomUUID()}`});
+      if (!ended.ok) return isBot ? this._botStepFailed(roomCode, `end:${turnId}`) : false;
+      emit({type: 'turn-ended', result: ended.result});
+      next();
+      return true;
     }
     if (!['WAITING_ROLL', 'PLAYER_ACTION'].includes(phase)) return false;
 
+    const jailed = gamePlayer?.status === 'IN_JAIL' || gamePlayer?.inJail === true;
+    if (isBot && jailed && phase === 'WAITING_ROLL') {
+      const choice = chooseJailAction({money: gamePlayer.money, hasCard: (gamePlayer.hasGetOutOfJailCard || 0) > 0});
+      if (choice !== 'ROLL') {
+        const freed = game.resolveJailAction({playerId, turnId, actionId: `bot-jail-${randomUUID()}`, action: choice});
+        if (freed.ok) {
+          emit({type: 'jail-action', result: freed.result});
+          next();
+          return true;
+        }
+      }
+    }
+
     const roll = game.rollDice({playerId, turnId, diceRoller: this.diceRoller,
-      ...(player.status === 'IN_JAIL' || player.inJail ? {actionId: `disconnect-jail-roll-${randomUUID()}`} : {})});
+      ...(jailed ? {actionId: `${isBot ? 'bot' : 'disconnect'}-jail-roll-${randomUUID()}`} : {})});
     if (!roll.ok) {
-      if ((player.status === 'IN_JAIL' || player.inJail === true) && phase === 'WAITING_ROLL') {
+      if (jailed && phase === 'WAITING_ROLL') {
         const retryKey = `${turnId}:${playerId}`;
         const previous = this.disconnectJailRetryAttempts.get(roomCode);
         const attempts = previous?.key === retryKey ? previous.attempts + 1 : 1;
         if (attempts <= 3) {
           this.disconnectJailRetryAttempts.set(roomCode, {key: retryKey, attempts});
-          this.scheduleDisconnectedAutomation(roomCode);
+          next();
         } else {
           this.disconnectJailRetryAttempts.delete(roomCode);
-          console.error(`[disconnect] jail auto-roll stopped after ${attempts - 1} retries for ${roomCode}/${playerId}: ${roll.error?.code || 'UNKNOWN'}`);
+          console.error(`[automation] jail auto-roll stopped after ${attempts - 1} retries for ${roomCode}/${playerId}: ${roll.error?.code || 'UNKNOWN'}`);
         }
+      } else if (isBot) {
+        return this._botStepFailed(roomCode, `roll:${turnId}`);
       }
       return false;
     }
     this.disconnectJailRetryAttempts.delete(roomCode);
     if (roll.result.jailAttempt && !roll.result.jailReleased) {
       emit({type: 'jail-roll', result: roll.result});
-      this.scheduleDisconnectedAutomation(roomCode);
+      next();
       return true;
     }
     if (roll.result.tripleDouble) {
       const penalty = game.sendToJailForThirdDouble({playerId, turnId, resolutionId: randomUUID()});
       if (penalty.ok) emit({type: 'triple-double', dice: roll.result, penalty: penalty.event});
-      this.scheduleDisconnectedAutomation(roomCode);
+      next();
       return penalty.ok;
     }
     const moved = game.moveCurrentPlayer({playerId, turnId, movementId: this.movementIdGenerator()});
@@ -177,7 +279,9 @@ export class RoomManager {
       resolutionId: this.resolutionIdGenerator()});
     if (!tile.ok) return false;
     emit({type: 'roll', dice: roll.result, movement: moved.movement, tileResolution: tile.resolution});
-    this.scheduleDisconnectedAutomation(roomCode);
+    // Beri waktu animasi dadu + langkah pion di layar pemain sebelum bot mengambil keputusan berikutnya.
+    this.automationExtraDelay.set(roomCode, Math.min(4500, 900 + (moved.movement.steps || roll.result.total || 0) * 230));
+    next();
     return true;
   }
 
@@ -237,8 +341,8 @@ export class RoomManager {
     player.sessionExpired = true;
     if (room.status === 'waiting') {
       room.players = room.players.filter(item => item.playerId !== player.playerId);
-      if (room.hostPlayerId === player.playerId && room.players.length) room.hostPlayerId = room.players[0].playerId;
-      if (room.players.length === 0) {
+      if (room.hostPlayerId === player.playerId && humanPlayers(room).length) room.hostPlayerId = humanPlayers(room)[0].playerId;
+      if (humanPlayers(room).length === 0) {
         this.rooms.delete(room.roomCode);
         this.onRoomUpdated(null, room.roomCode);
         return true;
@@ -417,6 +521,41 @@ export class RoomManager {
     return success({room: this.getPublicRoom(room.roomCode)});
   }
 
+  _hostRoomForBots(socketId) {
+    const membership = this.socketMembership.get(socketId);
+    if (!membership) return {error: failure('NOT_IN_ROOM', 'Pemain tidak sedang berada di room.')};
+    const room = this.rooms.get(membership.roomCode);
+    if (!room) return {error: failure('ROOM_NOT_FOUND', 'Room tidak ditemukan.')};
+    if (membership.playerId !== room.hostPlayerId) return {error: failure('HOST_ONLY', 'Hanya host yang dapat mengatur bot.')};
+    if (room.status !== 'waiting') return {error: failure('ROOM_STARTED', 'Bot tidak dapat diubah setelah permainan dimulai.')};
+    return {room};
+  }
+
+  addBot(socketId) {
+    const {room, error} = this._hostRoomForBots(socketId);
+    if (error) return error;
+    if (room.players.length >= ROOM_MAX_PLAYERS) return failure('ROOM_FULL', 'Room sudah penuh.');
+    const used = new Set(room.players.filter(player => player.isBot).map(player => player.playerName));
+    let number = 1;
+    while (used.has(`🤖 Bot ${number}`)) number++;
+    room.players.push({playerId: this.idGenerator(), socketId: null, playerName: `🤖 Bot ${number}`, isReady: true,
+      isConnected: true, isBot: true, joinedAt: new Date().toISOString()});
+    return success({room: this.getPublicRoom(room.roomCode)});
+  }
+
+  removeBot(socketId, payload) {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !hasOnlyKeys(payload, ['playerId']) ||
+        !isValidIdentifier(payload.playerId)) {
+      return failure('INVALID_PAYLOAD', 'Hapus bot hanya menerima playerId bot.');
+    }
+    const {room, error} = this._hostRoomForBots(socketId);
+    if (error) return error;
+    const bot = room.players.find(player => player.playerId === payload.playerId && player.isBot);
+    if (!bot) return failure('BOT_NOT_FOUND', 'Bot tidak ditemukan di room ini.');
+    room.players = room.players.filter(player => player.playerId !== bot.playerId);
+    return success({room: this.getPublicRoom(room.roomCode)});
+  }
+
   startRoom(socketId) {
     const membership = this.socketMembership.get(socketId);
     if (!membership) return failure('NOT_IN_ROOM', 'Pemain tidak sedang berada di room.');
@@ -442,7 +581,7 @@ export class RoomManager {
     try {
       gameState = this.gameStateFactory({
         roomCode: room.roomCode,
-        roster: room.players.map(({playerId, playerName}) => ({playerId, playerName}))
+        roster: room.players.map(({playerId, playerName, isBot}) => ({playerId, playerName, isBot: isBot === true}))
       });
       if (!gameState || !gameState.state || typeof gameState.toSnapshot !== 'function') {
         throw new Error('Factory tidak menghasilkan ServerGameState yang valid.');
@@ -654,6 +793,9 @@ export class RoomManager {
     if (!member || member.socketId !== socketId || member.isConnected !== true) {
       return failure('NOT_IN_ROOM', 'Identitas koneksi pemain tidak lagi aktif.');
     }
+    if (room.players.find(player => player.playerId === payload.toPlayerId)?.isBot) {
+      return failure('BOT_TRADE_UNAVAILABLE', 'Bot tidak menerima tawaran tukar aset.');
+    }
     return room.gameState.createTradeOffer({...payload, playerId: membership.playerId});
   }
 
@@ -763,10 +905,11 @@ export class RoomManager {
     const leavingPlayer = room.players.find(player => player.playerId === membership.playerId);
     this._revokeSession(room.roomCode, membership.playerId);
     room.players = room.players.filter(player => player.playerId !== membership.playerId);
-    if (leavingPlayer?.playerId === room.hostPlayerId && room.players.length > 0) {
-      room.hostPlayerId = room.players[0].playerId;
+    if (leavingPlayer?.playerId === room.hostPlayerId && humanPlayers(room).length > 0) {
+      room.hostPlayerId = humanPlayers(room)[0].playerId;
     }
-    if (room.players.length === 0) {
+    if (humanPlayers(room).length === 0) {
+      this._clearDisconnectAutomation(room.roomCode);
       room.gameState = null;
       this.rooms.delete(room.roomCode);
       return success({room: null, deleted: true, roomCode: room.roomCode});
@@ -813,8 +956,8 @@ export class RoomManager {
       createdAt: room.createdAt,
       minPlayers: ROOM_MIN_PLAYERS,
       maxPlayers: ROOM_MAX_PLAYERS,
-      players: room.players.map(({playerId, playerName, isReady, isConnected, joinedAt}) => ({
-        playerId, playerName, isReady, isConnected, joinedAt
+      players: room.players.map(({playerId, playerName, isReady, isConnected, joinedAt, isBot}) => ({
+        playerId, playerName, isReady, isConnected, joinedAt, isBot: isBot === true
       }))
     };
   }

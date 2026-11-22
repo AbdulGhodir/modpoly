@@ -37,7 +37,8 @@ export class LobbyManager {
     this.isOpen = false;
     this.currentView = 'main'; // 'main' | 'local' | 'multiplayer-menu' | 'multiplayer-room' | 'closed'
     this.multiplayerTab = 'create'; // 'create' | 'join'
-    this.localPlayerCount = 4;
+    this.localPlayerCount = 4; // jumlah pemain MANUSIA (1-4)
+    this.localBotCount = 0;    // jumlah bot (total manusia + bot maksimal 4)
     this.localPlayerNames = ['Pemain 1', 'Pemain 2', 'Pemain 3', 'Pemain 4'];
     this.closeTimer = null;
     this.previousStatus = client.getStatus();
@@ -363,9 +364,16 @@ export class LobbyManager {
       { name: 'Hijau', hex: '#22c55e' },
       { name: 'Kuning', hex: '#facc15' }
     ];
+    const MAX_TOTAL = 4;
+    this.localBotCount = Math.max(0, Math.min(this.localBotCount, MAX_TOTAL - this.localPlayerCount));
+    const humans = this.localPlayerCount;
+    const bots = this.localBotCount;
+    const total = humans + bots;
+    const canAddBot = total < MAX_TOTAL;
+    const canStart = total >= 2;
 
     let playerInputsHtml = '';
-    for (let i = 0; i < this.localPlayerCount; i++) {
+    for (let i = 0; i < humans; i++) {
       const color = defaultColors[i];
       const val = this.localPlayerNames[i] || `Pemain ${i + 1}`;
       playerInputsHtml += `
@@ -375,6 +383,19 @@ export class LobbyManager {
             <span class="local-player-role">Pemain ${i + 1} (${color.name})</span>
             <input type="text" class="local-player-input" data-index="${i}" maxlength="18" value="${escapeHtml(val)}" placeholder="Masukkan nama pemain ${i + 1}" />
           </label>
+        </div>
+      `;
+    }
+    for (let b = 0; b < bots; b++) {
+      const color = defaultColors[humans + b];
+      playerInputsHtml += `
+        <div class="local-player-row local-bot-row">
+          <span class="local-color-swatch" style="background:${color.hex};" title="Warna ${color.name}"></span>
+          <div class="local-player-label">
+            <span class="local-player-role">Bot ${b + 1}</span>
+            <span class="local-bot-name">🤖 Bot ${b + 1}</span>
+          </div>
+          <button type="button" class="btn-remove-bot" data-bot="${b}" aria-label="Hapus Bot ${b + 1}">✕</button>
         </div>
       `;
     }
@@ -391,9 +412,9 @@ export class LobbyManager {
 
         <div class="lobby-body">
           <div class="local-count-section">
-            <label class="section-title">Pilih Jumlah Pemain</label>
+            <label class="section-title">Jumlah Pemain (manusia)</label>
             <div class="local-count-chips">
-              ${[2, 3, 4].map(num => `
+              ${[1, 2, 3, 4].map(num => `
                 <button type="button" class="btn-count-chip ${this.localPlayerCount === num ? 'active' : ''}" data-count="${num}">
                   ${num} Pemain
                 </button>
@@ -402,9 +423,16 @@ export class LobbyManager {
           </div>
 
           <div class="local-roster-section">
-            <label class="section-title">Nama Pemain</label>
+            <label class="section-title">Daftar Pemain (${total}/${MAX_TOTAL})</label>
             <div class="local-roster-list">
               ${playerInputsHtml}
+            </div>
+            <button type="button" id="btn-add-bot" class="btn-add-bot" ${canAddBot ? '' : 'disabled'}>
+              ➕ Tambah Bot
+            </button>
+            <div class="local-bot-hint">
+              ${canAddBot ? 'Bot bermain otomatis: beli properti jika uangnya cukup, bayar denda penjara, dan memilih tempat parkir bebas.'
+                : 'Sudah 4 pemain. Kurangi jumlah pemain manusia untuk menambah bot.'}
             </div>
           </div>
 
@@ -413,8 +441,10 @@ export class LobbyManager {
             <span>Urutan giliran pemain akan <b>diacak otomatis</b> saat permainan dimulai!</span>
           </div>
 
+          ${canStart ? '' : '<div class="lobby-info-tip"><span class="tip-icon">🤖</span><span>Main sendiri? Tambahkan minimal <b>1 bot</b> sebagai lawan.</span></div>'}
+
           <div class="lobby-actions-row">
-            <button type="button" id="btn-start-local" class="btn-primary-action btn-lobby-big">
+            <button type="button" id="btn-start-local" class="btn-primary-action btn-lobby-big" ${canStart ? '' : 'disabled'}>
               Mulai Permainan ➔
             </button>
           </div>
@@ -433,6 +463,18 @@ export class LobbyManager {
       });
     });
 
+    this.overlay.querySelector('#btn-add-bot')?.addEventListener('click', () => {
+      if (this.localPlayerCount + this.localBotCount < MAX_TOTAL) this.localBotCount++;
+      this._render();
+    });
+
+    this.overlay.querySelectorAll('.btn-remove-bot').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.localBotCount = Math.max(0, this.localBotCount - 1);
+        this._render();
+      });
+    });
+
     this.overlay.querySelectorAll('.local-player-input').forEach(input => {
       input.addEventListener('input', e => {
         const idx = Number(e.target.dataset.index);
@@ -441,13 +483,20 @@ export class LobbyManager {
     });
 
     this.overlay.querySelector('#btn-start-local')?.addEventListener('click', () => {
+      if (this.localPlayerCount + this.localBotCount < 2) return;
       requestGameDisplayMode();
       const names = [];
+      const botFlags = [];
       for (let i = 0; i < this.localPlayerCount; i++) {
         names.push(this.localPlayerNames[i] || `Pemain ${i + 1}`);
+        botFlags.push(false);
+      }
+      for (let b = 0; b < this.localBotCount; b++) {
+        names.push(`🤖 Bot ${b + 1}`);
+        botFlags.push(true);
       }
       try {
-        startLocalGame({ playerCount: this.localPlayerCount, playerNames: names });
+        startLocalGame({ playerCount: names.length, playerNames: names, botFlags });
       } catch (err) {
         console.error('[LobbyManager] startLocalGame gagal:', err);
       }
@@ -578,8 +627,9 @@ export class LobbyManager {
       const color = playerColors[idx % playerColors.length];
       const isSelf = player.playerId === this.playerId;
       const isRoomHost = player.playerId === room.hostPlayerId;
-      const readyClass = player.isConnected === false ? 'offline' : player.isReady ? 'ready' : 'not-ready';
-      const readyLabel = player.isConnected === false ? 'Terputus' : player.isReady ? 'Ready' : 'Belum Ready';
+      const isBot = player.isBot === true;
+      const readyClass = isBot ? 'ready' : player.isConnected === false ? 'offline' : player.isReady ? 'ready' : 'not-ready';
+      const readyLabel = isBot ? 'Bot' : player.isConnected === false ? 'Terputus' : player.isReady ? 'Ready' : 'Belum Ready';
 
       return `
         <li class="room-roster-item ${isSelf ? 'is-self' : ''}">
@@ -590,12 +640,14 @@ export class LobbyManager {
               <div class="roster-badge-group">
                 ${isRoomHost ? '<span class="badge-host">👑 HOST</span>' : ''}
                 ${isSelf ? '<span class="badge-self">👤 ANDA</span>' : ''}
+                ${isBot ? '<span class="badge-bot">🤖 BOT</span>' : ''}
               </div>
             </div>
           </div>
           <span class="roster-ready-pill ${readyClass}">
             ${readyLabel}
           </span>
+          ${isBot && isHost && room.status === 'waiting' ? `<button type="button" class="btn-remove-bot" data-bot-id="${escapeHtml(player.playerId)}" aria-label="Hapus bot" ${canAct ? '' : 'disabled'}>✕</button>` : ''}
         </li>
       `;
     }).join('');
@@ -637,7 +689,7 @@ export class LobbyManager {
           ` : room.status === 'waiting' && !enoughPlayers ? `
             <div class="lobby-info-tip">
               <span class="tip-icon">⏳</span>
-              <span>Menunggu minimal <b>2 pemain</b> untuk dapat memulai game.</span>
+              <span>Menunggu minimal <b>2 pemain</b> untuk dapat memulai game. Main sendiri? Host bisa menekan <b>Tambah Bot</b>.</span>
             </div>
           ` : room.status === 'waiting' && !allReady ? `
             <div class="lobby-info-tip">
@@ -655,6 +707,12 @@ export class LobbyManager {
             ${room.status === 'waiting' ? `
               <button id="room-toggle-ready" class="btn-primary-action btn-ready ${self?.isReady ? 'is-ready' : ''}" type="button" ${canAct ? '' : 'disabled'}>
                 ${self?.isReady ? '⏳ Batal Ready' : '✅ Saya Ready'}
+              </button>
+            ` : ''}
+
+            ${isHost && room.status === 'waiting' ? `
+              <button id="room-add-bot" class="btn-add-bot" type="button" ${canAct && room.players.length < room.maxPlayers ? '' : 'disabled'}>
+                ➕ Tambah Bot
               </button>
             ` : ''}
 
@@ -696,6 +754,13 @@ export class LobbyManager {
     this.overlay.querySelector('#room-toggle-ready')?.addEventListener('click', () => {
       if (!self?.isReady) requestGameDisplayMode();
       this._request(self?.isReady ? 'room:not-ready' : 'room:ready');
+    });
+
+    this.overlay.querySelector('#room-add-bot')?.addEventListener('click', () => {
+      this._request('room:add-bot');
+    });
+    this.overlay.querySelectorAll('.btn-remove-bot').forEach(btn => {
+      btn.addEventListener('click', () => this._request('room:remove-bot', {playerId: btn.dataset.botId}));
     });
 
     this.overlay.querySelector('#room-start')?.addEventListener('click', () => {

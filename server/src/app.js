@@ -8,7 +8,7 @@ import {RateLimiter} from './RateLimiter.js';
 
 const MAX_PING_LENGTH = 200;
 const MAX_PLAYER_NAME_LENGTH = 24;
-const ROOM_EVENTS = new Set(['room:create', 'room:join', 'room:resume', 'room:ready', 'room:not-ready', 'room:get', 'room:leave', 'room:start']);
+const ROOM_EVENTS = new Set(['room:create', 'room:join', 'room:resume', 'room:ready', 'room:not-ready', 'room:get', 'room:leave', 'room:start', 'room:add-bot', 'room:remove-bot']);
 const ROOM_CREATE_OR_JOIN_EVENTS = new Set(['room:create', 'room:join']);
 
 const INSTANCE_ID = randomUUID().slice(0, 8);
@@ -101,6 +101,16 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
     } else if (resolution.kind === 'UNSUPPORTED') io.to(roomCode).emit('game:tile-resolution-unsupported', {...resolution.event});
     else if (resolution.kind === 'TILE_RESOLVED') io.to(roomCode).emit('game:tile-resolution-complete', {...resolution.event});
   };
+  const publishDebtResult = result => {
+    const type = result.type === 'UPDATED' ? 'UPDATED' : 'RESOLVED';
+    for (const trade of result.invalidatedTrades || []) {
+      publishTradeState(result.roomCode, {roomCode: result.roomCode, type: 'INVALIDATED', trade, snapshot: result.snapshot});
+    }
+    io.to(result.roomCode).emit('game:debt-state', roomManager.getGameState(result.roomCode).debtStateEvent(type, result));
+    if (result.chanceContinuation?.nextPresentation?.event) {
+      publishChancePresentation(result.roomCode, result.chanceContinuation.nextPresentation.event);
+    }
+  };
   roomManager.setAutoActionListener?.((roomCode, action) => {
     const game = roomManager.getGameState(roomCode);
     if (!game || !action) return;
@@ -118,7 +128,19 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
       io.to(roomCode).emit('game:dice-rolled', {...action.dice});
       io.to(roomCode).emit('game:jail-penalty', {...action.penalty});
     } else if (action.type === 'free-parking') {
-      io.to(roomCode).emit('game:free-parking-action-resolved', {...action.result});
+      // TRAVEL membungkus event di `event` dan membawa movement + tileResolution; STAY mengirim event langsung.
+      const {movement, tileResolution} = action.result;
+      io.to(roomCode).emit('game:free-parking-action-resolved', {...(action.result.event || action.result)});
+      if (movement) {
+        io.to(roomCode).emit('game:player-moved', {...movement});
+        publishTileResolution(roomCode, tileResolution);
+      }
+    } else if (action.type === 'jail-action') {
+      io.to(roomCode).emit('game:jail-action-resolved', {...action.result});
+    } else if (action.type === 'building') {
+      io.to(roomCode).emit('game:building-state', {...action.result});
+    } else if (action.type === 'debt') {
+      publishDebtResult(action.result);
     } else if (action.type === 'property') {
       if (action.result.type === 'STARTED') io.to(roomCode).emit('game:auction-started', {...action.result});
       else io.to(roomCode).emit('game:property-resolution-complete', {...action.result});
@@ -293,7 +315,21 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
             console.error(`[room] initial snapshot failed for ${roomCode}/${member.playerId}:`, error.message);
           }
         }
+        // Kalau giliran pertama jatuh ke bot, mulai otomatisasinya.
+        roomManager.scheduleDisconnectedAutomation?.(roomCode);
       }
+      return result;
+    });
+
+    registerAckEvent('room:add-bot', () => {
+      const result = roomManager.addBot(socket.id);
+      if (result.ok) io.to(result.room.roomCode).emit('room:updated', result.room);
+      return result;
+    });
+
+    registerAckEvent('room:remove-bot', payload => {
+      const result = roomManager.removeBot(socket.id, payload);
+      if (result.ok) io.to(result.room.roomCode).emit('room:updated', result.room);
       return result;
     });
 
@@ -467,15 +503,7 @@ export function createBackendServer({port = serverConfig.port, allowedOrigins = 
       }
       const result = roomManager.resolveDebtAction(socket.id, payload);
       if (!result.ok) return result;
-      const type = result.result.type === 'UPDATED' ? 'UPDATED' : 'RESOLVED';
-      for (const trade of result.result.invalidatedTrades || []) {
-        publishTradeState(result.result.roomCode, {roomCode: result.result.roomCode,
-          type: 'INVALIDATED', trade, snapshot: result.result.snapshot});
-      }
-      io.to(result.result.roomCode).emit('game:debt-state', roomManager.getGameState(result.result.roomCode).debtStateEvent(type, result.result));
-      if (result.result.chanceContinuation?.nextPresentation?.event) {
-        publishChancePresentation(result.result.roomCode, result.result.chanceContinuation.nextPresentation.event);
-      }
+      publishDebtResult(result.result);
       return result;
     });
 

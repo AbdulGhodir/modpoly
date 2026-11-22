@@ -3907,3 +3907,54 @@ body.parking-picking #center-ui > *{pointer-events:none}
 }
 @media (prefers-reduced-motion:reduce){.parking-pick-panel{animation:none}}
 body.in-lobby .parking-pick-panel{display:none}
+
+
+/* ===== Bot (lokal & multiplayer) ===== */
+.btn-add-bot {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px dashed #ea580c;
+  background: #fff7ed;
+  color: #9a3412;
+  font-weight: 800;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s;
+}
+.btn-add-bot:hover:not(:disabled) { background: #ffedd5; }
+.btn-add-bot:active:not(:disabled) { transform: translateY(1px); }
+.btn-add-bot:disabled { opacity: 0.5; cursor: not-allowed; border-color: #d6c3ad; color: #8a7561; background: #faf6f0; }
+.local-bot-hint { margin-top: 6px; font-size: 11px; line-height: 1.4; color: #795438; }
+.local-bot-row { background: #fff7ed; border-color: #fdba74; }
+.local-bot-name { font-size: 14px; font-weight: 800; color: #7c2d12; }
+.btn-remove-bot {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 0;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-weight: 800;
+  cursor: pointer;
+}
+.btn-remove-bot:hover:not(:disabled) { background: #fecaca; }
+.btn-remove-bot:disabled { opacity: 0.5; cursor: not-allowed; }
+.badge-bot {
+  font-size: 8.5px;
+  font-weight: 800;
+  background: #ffedd5;
+  color: #9a3412;
+  border: 1px solid #fdba74;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.room-actions-bar .btn-add-bot { width: auto; flex: 1 1 100%; }
+.bot-thinking { margin-top: 6px; font-size: 12px; font-weight: 700; color: #9a3412; }
+.auction-card.bot-turn .auction-bid-buttons,
+.auction-card.bot-turn .auction-custom-bid,
+.auction-card.bot-turn .auction-footer-actions { display: none; }
+/* Saat giliran bot: manusia tidak boleh menekan dadu / menu aksi atas nama bot */
+body.bot-turn #dice { pointer-events: none; }
+body.bot-turn #btn-player-action { display: none; }

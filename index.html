@@ -17,16 +17,43 @@
   #boot-screen .track{width:min(220px,58vw);height:8px;overflow:hidden;border-radius:99px;background:#e8d8c1;box-shadow:inset 0 1px 3px #6b442233}
   #boot-screen .progress{width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#f59e0b,#ea580c);animation:boot-progress 1.25s ease-in-out infinite alternate}
   @keyframes boot-progress{from{transform:translateX(-35%)}to{transform:translateX(175%)}}
+  #boot-screen .caption{text-align:center}
+  #boot-server{display:none;flex-direction:column;align-items:center;gap:6px;text-align:center;max-width:320px}
+  #boot-server.show{display:flex}
+  #boot-server-status{font-size:13px;font-weight:700;color:#9a3412}
+  #boot-server-hint{font-size:12px;line-height:1.45;color:#795438;min-height:1.45em}
+  #boot-actions{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:4px}
+  #boot-local,#boot-reload{appearance:none;border:0;cursor:pointer;font:inherit;font-size:14px;font-weight:800;padding:12px 22px;border-radius:14px;color:#fff;background:linear-gradient(180deg,#f59e0b,#ea580c);box-shadow:0 4px 0 #9a3412,0 8px 16px #9a341240}
+  #boot-local:active,#boot-reload:active{transform:translateY(2px);box-shadow:0 2px 0 #9a3412}
+  #boot-local:disabled{opacity:.6;cursor:default}
+  #boot-local-note{font-size:11px;color:#795438}
+  #boot-error{display:none;flex-direction:column;align-items:center;gap:8px;text-align:center;max-width:320px;font-size:13px;color:#7f1d1d}
+  #boot-error.show{display:flex}
   body.app-ready #boot-screen{opacity:0;visibility:hidden;pointer-events:none}
   @media(prefers-reduced-motion:reduce){#boot-screen .progress{animation:none;width:70%}#boot-screen{transition:none}}
 </style>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link id="gfonts-css" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet"></noscript>
 </head>
 <body class="in-lobby app-loading">
 <div id="boot-screen" role="status" aria-live="polite" aria-label="Memuat ModPoly">
   <div class="brand">ModPoly</div>
   <div class="track" aria-hidden="true"><div class="progress"></div></div>
   <div class="caption">Menyiapkan papan permainan…</div>
+  <div id="boot-server" aria-live="polite">
+    <div id="boot-server-status"></div>
+    <div id="boot-server-hint"></div>
+  </div>
+  <div id="boot-actions">
+    <button id="boot-local" type="button">🏠 Main Lokal</button>
+    <div id="boot-local-note">Tanpa menunggu server</div>
+  </div>
+  <div id="boot-error" role="alert">
+    <div id="boot-error-text">Papan belum siap.</div>
+    <button id="boot-reload" type="button">Muat ulang</button>
+  </div>
 </div>
 <div id="g"></div>
 
@@ -58,6 +85,30 @@
 <div id="rotate-hint" role="status"><span>📱↻ Putar HP ke mode landscape agar papan lebih besar</span><button id="rotate-ok" type="button" aria-label="Tutup">✕</button></div>
 <div id="fs-gate"><div class="fs-card"><div class="fs-logo">ModPoly</div><p>Mainkan dalam layar penuh (landscape) agar papan lebih besar.</p><button id="fs-go" type="button">⛶ MAIN LAYAR PENUH</button><small id="fs-note"></small></div></div>
 <div id="toast"></div>
+<script>
+(function(){
+  var KEY='modpoly.bootRetry';
+  function fail(msg){
+    if(window.__gameReady) return;
+    var box=document.getElementById('boot-error'),text=document.getElementById('boot-error-text');
+    if(text&&msg) text.textContent=msg;
+    if(box) box.classList.add('show');
+    var cap=document.querySelector('#boot-screen .caption'); if(cap) cap.textContent='Gagal menyiapkan papan';
+  }
+  window.__bootFail=fail;
+  var reload=document.getElementById('boot-reload');
+  if(reload) reload.addEventListener('click',function(){location.reload()});
+  window.addEventListener('error',function(e){ if(!window.__gameReady && e && e.message) fail('Terjadi kesalahan saat memuat game.'); });
+  window.addEventListener('unhandledrejection',function(){ if(!window.__gameReady) fail('Terjadi kesalahan saat memuat game.'); });
+  // Kalau papan tak kunjung siap: muat ulang otomatis satu kali, lalu tampilkan tombol manual.
+  setTimeout(function(){
+    if(window.__gameReady) return;
+    var tried=false; try{tried=sessionStorage.getItem(KEY)==='1'}catch(e){}
+    if(!tried){ try{sessionStorage.setItem(KEY,'1')}catch(e){} location.reload(); }
+    else fail('Papan belum siap setelah menunggu cukup lama.');
+  },20000);
+})();
+</script>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>

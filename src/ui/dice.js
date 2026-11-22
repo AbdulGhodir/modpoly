@@ -214,6 +214,13 @@ export function initDice({client=socketClient,getActiveRoom=()=>null,getLocalPla
       e.stopPropagation();
     }
 
+    // Mode lokal: tombol "Selesai Giliran" berada di dalam kotak dadu, jadi klik berhenti di sini (stopPropagation)
+    // dan tidak pernah sampai ke handler dokumen. Akhiri giliran langsung dari sini.
+    if(endTurnButton && !isMultiplayer()){
+      turnManager.endTurn(endTurnButton.dataset.turnKey || null);
+      return;
+    }
+
     if(isMultiplayer()){
       const state=clientGameStore.getState();
       const playerId=getLocalPlayerId();

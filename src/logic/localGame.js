@@ -26,7 +26,7 @@ export function configureLocalGame({ turnManager = null, buildHud = null, toast 
  * Memulai sesi permainan lokal (single device) dengan jumlah dan nama pemain kustom.
  * Urutan giliran pemain diacak secara adil sebelum permainan dimulai.
  */
-export function startLocalGame({ playerCount = 4, playerNames = [], tiles = null } = {}) {
+export function startLocalGame({ playerCount = 4, playerNames = [], botFlags = [], tiles = null } = {}) {
   const count = Math.max(2, Math.min(4, Number(playerCount) || 4));
   const activeTiles = tiles || injectedTiles || clientGameStore.getState()?.tiles || [];
 
@@ -35,7 +35,7 @@ export function startLocalGame({ playerCount = 4, playerNames = [], tiles = null
   for (let i = 0; i < count; i++) {
     const raw = playerNames[i];
     const name = (typeof raw === 'string' && raw.trim()) ? raw.trim() : `Pemain ${i + 1}`;
-    roster.push({ name });
+    roster.push({ name, isBot: botFlags[i] === true });
   }
 
   // 2. Acak urutan giliran pemain (Fisher-Yates shuffle)
@@ -50,6 +50,7 @@ export function startLocalGame({ playerCount = 4, playerNames = [], tiles = null
     playerId: `player-${seat + 1}`,
     seat,
     name: member.name,
+    isBot: member.isBot === true,
     cn: DEFAULT_PLAYER_COLORS[seat].cn,
     color: DEFAULT_PLAYER_COLORS[seat].color,
     dark: DEFAULT_PLAYER_COLORS[seat].dark,
@@ -105,6 +106,10 @@ export function startLocalGame({ playerCount = 4, playerNames = [], tiles = null
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('turn:ready', { detail: { player: players[0] } }));
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('localgame:started', { detail: { players } }));
   }
 
   if (toastHandler) {
