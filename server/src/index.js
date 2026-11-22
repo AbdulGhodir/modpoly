@@ -3,7 +3,7 @@ import {serverConfig} from './config.js';
 
 const backend = createBackendServer();
 
-backend.httpServer.listen(serverConfig.port, '0.0.0.0', () => {
+backend.httpServer.listen(serverConfig.port, () => {
   console.info(`[http] Monopoly backend listening on port ${serverConfig.port}`);
   console.info(`[http] allowed origins: ${serverConfig.allowedOrigins.join(', ')}`);
   console.info(`[http] health check: http://localhost:${serverConfig.port}/health`);
