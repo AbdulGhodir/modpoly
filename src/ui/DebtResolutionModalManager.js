@@ -1,4 +1,5 @@
 import {clientGameStore} from '../state/ClientGameStore.js';
+import {confirmDialog} from './dialog.js';
 import {socketClient} from '../network/SocketClient.js';
 import {createActionGuard} from '../logic/ActionGuard.js';
 import {bankruptcyModalManager} from './BankruptcyModalManager.js';
@@ -113,8 +114,9 @@ export class DebtResolutionModalManager {
     if (this.localPlayerId?.() !== debt.playerId || this.requestPending) return false;
     const action = button.getAttribute('data-action');
     const propertyPos = button.hasAttribute('data-pos') ? Number(button.getAttribute('data-pos')) : undefined;
-    if (action === 'BANKRUPTCY' && typeof window !== 'undefined' &&
-        !window.confirm(`Yakin ingin menyatakan bangkrut kepada ${debt.creditorName}?`)) return false;
+    if (action === 'BANKRUPTCY' && !(await confirmDialog({title: 'Menyerah dan bangkrut?', icon: '💥', tone: 'danger',
+      message: `Kamu akan dinyatakan bangkrut kepada ${debt.creditorName} dan keluar dari permainan.`,
+      confirmText: 'Ya, bangkrut', cancelText: 'Jangan dulu'}))) return false;
     this.requestPending = true;
     this.render({...debt, playerBalance: this.store.getBalance(debt.playerId)});
     let response;

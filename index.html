@@ -3,34 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ModPoly - Monopoly</title>
+<title>ModPoly - Game Papan Properti</title>
+<meta name="description" content="ModPoly: game papan properti seru. Beli properti, tarik sewa, dan jadi juragan kota. Main offline atau online bareng teman.">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#fbfaf7">
+<meta name="theme-color" content="#f2622f">
 <style>
-  html,body{width:100%;height:100%;margin:0;background:#fbfaf7}
+  html,body{width:100%;height:100%;margin:0;background:#f2622f}
   body.app-loading>*:not(#boot-screen){visibility:hidden!important}
-  #boot-screen{position:fixed;inset:0;z-index:9999;display:grid;place-content:center;justify-items:center;gap:18px;padding:24px;background:radial-gradient(ellipse at 50% 35%,#fffdf7 0%,#f7ead5 58%,#e8c89f 100%);color:#4b2c17;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;transition:opacity .3s ease,visibility .3s ease}
-  #boot-screen .brand{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;font-size:clamp(36px,9vw,58px);font-weight:900;letter-spacing:-.04em;color:#c2410c;text-shadow:0 3px 0 #f7c77e,0 8px 18px #9a341233}
-  #boot-screen .caption{font-size:14px;font-weight:600;color:#795438}
-  #boot-screen .track{width:min(220px,58vw);height:8px;overflow:hidden;border-radius:99px;background:#e8d8c1;box-shadow:inset 0 1px 3px #6b442233}
-  #boot-screen .progress{width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#f59e0b,#ea580c);animation:boot-progress 1.25s ease-in-out infinite alternate}
+  #boot-screen{position:fixed;inset:0;z-index:9999;display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(16px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));overflow:auto;box-sizing:border-box;
+    background:radial-gradient(ellipse at 50% 0%,#ffe08a 0%,rgba(255,224,138,0) 55%),linear-gradient(165deg,#ffb347 0%,#f2622f 52%,#a8321e 100%);
+    font-family:Fredoka,"Baloo 2","Segoe UI",system-ui,-apple-system,sans-serif;color:#3b2314;transition:opacity .35s ease,visibility .35s ease}
+  #boot-screen::before{content:"";position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(rgba(255,255,255,.22) 2px,transparent 2.6px);background-size:30px 30px}
+  .boot-card{position:relative;display:flex;flex-direction:column;align-items:center;gap:12px;width:min(380px,100%);box-sizing:border-box;padding:24px 22px 20px;border-radius:28px;text-align:center;background:#fff8ea;box-shadow:0 8px 0 #c9461f,0 22px 40px rgba(90,20,5,.35)}
+  #boot-screen .brand{font-size:clamp(40px,11vw,60px);font-weight:700;line-height:1;letter-spacing:-.01em;text-shadow:0 3px 0 rgba(0,0,0,.12)}
+  #boot-screen .brand .b-mod{color:#e8512b}#boot-screen .brand .b-poly{color:#f2a100}
+  .boot-dice{display:flex;gap:14px;height:62px;align-items:flex-end}
+  .boot-dice svg{width:52px;height:52px;animation:boot-bounce 1.1s ease-in-out infinite}
+  .boot-dice svg:nth-child(2){animation-delay:.28s}
+  @keyframes boot-bounce{0%,100%{transform:translateY(0) rotate(-6deg)}45%{transform:translateY(-16px) rotate(8deg)}}
+  #boot-screen .track{width:100%;height:10px;overflow:hidden;border-radius:99px;background:#efdcc0;box-shadow:inset 0 1px 3px rgba(107,68,34,.25)}
+  #boot-screen .progress{width:42%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#ffc83d,#ea580c);animation:boot-progress 1.25s ease-in-out infinite alternate}
   @keyframes boot-progress{from{transform:translateX(-35%)}to{transform:translateX(175%)}}
-  #boot-screen .caption{text-align:center}
-  #boot-server{display:none;flex-direction:column;align-items:center;gap:6px;text-align:center;max-width:320px}
+  #boot-screen .caption{font-size:17px;font-weight:600;color:#3b2314;text-align:center}
+  #boot-server{display:none;flex-direction:column;align-items:center;gap:4px;text-align:center}
   #boot-server.show{display:flex}
-  #boot-server-status{font-size:13px;font-weight:700;color:#9a3412}
-  #boot-server-hint{font-size:12px;line-height:1.45;color:#795438;min-height:1.45em}
-  #boot-actions{display:flex;flex-direction:column;align-items:center;gap:8px;margin-top:4px}
-  #boot-local,#boot-reload{appearance:none;border:0;cursor:pointer;font:inherit;font-size:14px;font-weight:800;padding:12px 22px;border-radius:14px;color:#fff;background:linear-gradient(180deg,#f59e0b,#ea580c);box-shadow:0 4px 0 #9a3412,0 8px 16px #9a341240}
-  #boot-local:active,#boot-reload:active{transform:translateY(2px);box-shadow:0 2px 0 #9a3412}
+  #boot-server-status{font-size:14px;font-weight:600;color:#b83a1a}
+  #boot-server-hint{font-size:13px;line-height:1.45;color:#7a5a43;min-height:1.45em}
+  #boot-tip{font-size:13px;line-height:1.45;color:#7a5a43;min-height:2.9em;display:flex;align-items:center;justify-content:center;padding:8px 12px;border-radius:14px;background:#fdecc8;width:100%;box-sizing:border-box}
+  #boot-actions{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%;margin-top:2px}
+  #boot-local,#boot-reload{appearance:none;border:0;cursor:pointer;font:inherit;font-size:16px;font-weight:600;padding:13px 22px;border-radius:16px;color:#fff;width:100%;background:linear-gradient(180deg,#2fbf6b,#1f9d55);box-shadow:0 4px 0 #157a40,0 10px 18px rgba(21,122,64,.3);-webkit-tap-highlight-color:transparent}
+  #boot-reload{background:linear-gradient(180deg,#f59e0b,#ea580c);box-shadow:0 4px 0 #9a3412,0 10px 18px rgba(154,52,18,.3)}
+  #boot-local:active,#boot-reload:active{transform:translateY(3px);box-shadow:0 1px 0 #157a40}
   #boot-local:disabled{opacity:.6;cursor:default}
-  #boot-local-note{font-size:11px;color:#795438}
-  #boot-error{display:none;flex-direction:column;align-items:center;gap:8px;text-align:center;max-width:320px;font-size:13px;color:#7f1d1d}
+  #boot-local-note{font-size:12px;color:#7a5a43}
+  #boot-error{display:none;flex-direction:column;align-items:center;gap:10px;text-align:center;width:100%;font-size:14px;color:#8a1c1c}
   #boot-error.show{display:flex}
   body.app-ready #boot-screen{opacity:0;visibility:hidden;pointer-events:none}
-  @media(prefers-reduced-motion:reduce){#boot-screen .progress{animation:none;width:70%}#boot-screen{transition:none}}
+  @media (max-height:520px){.boot-card{padding:14px 18px 14px;gap:8px}.boot-dice{height:46px}.boot-dice svg{width:38px;height:38px}#boot-screen .brand{font-size:36px}#boot-tip{display:none}#boot-local,#boot-reload{padding:10px 18px;font-size:15px}}
+  @media(prefers-reduced-motion:reduce){#boot-screen .progress{animation:none;width:70%}.boot-dice svg{animation:none}#boot-screen{transition:none}}
 </style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -39,51 +51,58 @@
 </head>
 <body class="in-lobby app-loading">
 <div id="boot-screen" role="status" aria-live="polite" aria-label="Memuat ModPoly">
-  <div class="brand">ModPoly</div>
-  <div class="track" aria-hidden="true"><div class="progress"></div></div>
-  <div class="caption">Menyiapkan papan permainan…</div>
-  <div id="boot-server" aria-live="polite">
-    <div id="boot-server-status"></div>
-    <div id="boot-server-hint"></div>
-  </div>
-  <div id="boot-actions">
-    <button id="boot-local" type="button">🏠 Main Lokal</button>
-    <div id="boot-local-note">Tanpa menunggu server</div>
-  </div>
-  <div id="boot-error" role="alert">
-    <div id="boot-error-text">Papan belum siap.</div>
-    <button id="boot-reload" type="button">Muat ulang</button>
+  <div class="boot-card">
+    <div class="brand"><span class="b-mod">Mod</span><span class="b-poly">Poly</span></div>
+    <div class="boot-dice" aria-hidden="true">
+      <svg viewBox="0 0 100 100"><rect x="6" y="10" width="88" height="88" rx="20" fill="#d9b88a"/><rect x="6" y="4" width="88" height="88" rx="20" fill="#fffdf6" stroke="#ecd9b8" stroke-width="3"/><g fill="#c2410c"><circle cx="28" cy="28" r="8.5"/><circle cx="50" cy="50" r="8.5"/><circle cx="72" cy="72" r="8.5"/></g></svg>
+      <svg viewBox="0 0 100 100"><rect x="6" y="10" width="88" height="88" rx="20" fill="#d9b88a"/><rect x="6" y="4" width="88" height="88" rx="20" fill="#fffdf6" stroke="#ecd9b8" stroke-width="3"/><g fill="#c2410c"><circle cx="28" cy="28" r="8.5"/><circle cx="72" cy="28" r="8.5"/><circle cx="28" cy="72" r="8.5"/><circle cx="72" cy="72" r="8.5"/></g></svg>
+    </div>
+    <div class="track" aria-hidden="true"><div class="progress"></div></div>
+    <div class="caption">Menyiapkan papan permainan…</div>
+    <div id="boot-server" aria-live="polite">
+      <div id="boot-server-status"></div>
+      <div id="boot-server-hint"></div>
+    </div>
+    <div id="boot-tip" aria-hidden="true">💡 Beli properti satu warna lengkap agar sewanya makin mahal!</div>
+    <div id="boot-actions">
+      <button id="boot-local" type="button">🎲 Main Offline Sekarang</button>
+      <div id="boot-local-note">Tanpa menunggu, bisa lawan bot</div>
+    </div>
+    <div id="boot-error" role="alert">
+      <div id="boot-error-text">Permainan belum bisa dibuka.</div>
+      <button id="boot-reload" type="button">Muat Ulang</button>
+    </div>
   </div>
 </div>
 <div id="g"></div>
 
-<!-- Menu Utama / Lobby Root Screen -->
+<!-- Menu utama -->
 <div id="lobby-screen" class="lobby-screen"></div>
 
-<!-- Tombol lobby dan pengaturan -->
+<!-- Tombol saat bermain -->
 <div id="top-actions">
-  <button class="btn" id="btn-lobby-home" title="Menu Utama" aria-label="Menu Utama">🏠</button>
-  <button class="btn" id="btn-multiplayer" title="Info Room" aria-label="Buka lobby multiplayer">🌐</button>
-  <button class="btn" data-m="Pengaturan" title="Pengaturan">⚙️</button>
+  <button class="btn" id="btn-help" title="Cara bermain" aria-label="Cara bermain"><span class="ic">❓</span><span class="lb">Bantuan</span></button>
+  <button class="btn" id="btn-multiplayer" title="Info ruangan" aria-label="Info ruangan"><span class="ic">👥</span><span class="lb">Ruangan</span></button>
+  <button class="btn" id="btn-lobby-home" title="Menu utama" aria-label="Menu utama"><span class="ic">🏠</span><span class="lb">Menu</span></button>
 </div>
 
-<!-- Area Tengah Papan -->
+<!-- Area tengah papan -->
 <div id="center-ui">
   <div id="bar">
-    <div class="t" id="bar-round">Putaran <b id="rd">1</b>/30</div>
+    <div class="t" id="bar-round">Putaran <b id="rd">1</b></div>
     <div class="sep">•</div>
     <div class="t" id="bar-turn">Giliran: <b id="tn">Pemain 1</b></div>
   </div>
   <div id="logo">ModPoly</div>
-  <div id="dice" title="Klik untuk melempar dadu">
+  <div id="dice" title="Ketuk untuk melempar dadu">
     <div class="dies"><div class="die"></div><div class="die"></div></div>
-    <div id="roll">Klik dadu 🎲</div>
+    <div id="roll">Lempar dadu 🎲</div>
   </div>
 </div>
 
 <div id="hud"></div>
-<div id="rotate-hint" role="status"><span>📱↻ Putar HP ke mode landscape agar papan lebih besar</span><button id="rotate-ok" type="button" aria-label="Tutup">✕</button></div>
-<div id="fs-gate"><div class="fs-card"><div class="fs-logo">ModPoly</div><p>Mainkan dalam layar penuh (landscape) agar papan lebih besar.</p><button id="fs-go" type="button">⛶ MAIN LAYAR PENUH</button><small id="fs-note"></small></div></div>
+<div id="rotate-hint" role="status"><span>📱 Putar HP ke posisi mendatar agar papan lebih besar</span><button id="rotate-ok" type="button" aria-label="Tutup">✕</button></div>
+<div id="fs-gate"><div class="fs-card"><div class="fs-logo">ModPoly</div><p>Papan paling nyaman dimainkan dalam layar penuh dengan posisi HP mendatar (landscape).</p><button id="fs-go" type="button">⛶ Mulai Layar Penuh</button><small id="fs-note"></small></div></div>
 <div id="toast"></div>
 <script>
 (function(){
@@ -93,20 +112,24 @@
     var box=document.getElementById('boot-error'),text=document.getElementById('boot-error-text');
     if(text&&msg) text.textContent=msg;
     if(box) box.classList.add('show');
-    var cap=document.querySelector('#boot-screen .caption'); if(cap) cap.textContent='Gagal menyiapkan papan';
+    var cap=document.querySelector('#boot-screen .caption'); if(cap) cap.textContent='Ups, permainan belum bisa dibuka';
   }
   window.__bootFail=fail;
   var reload=document.getElementById('boot-reload');
   if(reload) reload.addEventListener('click',function(){location.reload()});
-  window.addEventListener('error',function(e){ if(!window.__gameReady && e && e.message) fail('Terjadi kesalahan saat memuat game.'); });
-  window.addEventListener('unhandledrejection',function(){ if(!window.__gameReady) fail('Terjadi kesalahan saat memuat game.'); });
+  window.addEventListener('error',function(e){ if(!window.__gameReady && e && e.message) fail('Terjadi kendala saat memuat permainan. Coba muat ulang.'); });
+  window.addEventListener('unhandledrejection',function(){ if(!window.__gameReady) fail('Terjadi kendala saat memuat permainan. Coba muat ulang.'); });
   // Kalau papan tak kunjung siap: muat ulang otomatis satu kali, lalu tampilkan tombol manual.
   setTimeout(function(){
     if(window.__gameReady) return;
     var tried=false; try{tried=sessionStorage.getItem(KEY)==='1'}catch(e){}
     if(!tried){ try{sessionStorage.setItem(KEY,'1')}catch(e){} location.reload(); }
-    else fail('Papan belum siap setelah menunggu cukup lama.');
+    else fail('Memuat terlalu lama. Coba muat ulang halaman.');
   },20000);
+  // Tips bergilir selama menunggu.
+  var tips=['💡 Beli properti satu warna lengkap agar sewanya makin mahal!','💡 Punya satu warna penuh? Kamu bisa membangun rumah dan hotel.','💡 Di penjara? Bayar denda $50 untuk keluar lebih cepat.','💡 Di Parkir Bebas, kamu bisa pindah ke petak pilihanmu dengan biaya $50.','💡 Belum ada teman? Tambahkan bot sebagai lawan latihan.','💡 Uang tidak cukup? Jual bangunan atau gadai properti dulu.'];
+  var tipEl=document.getElementById('boot-tip'),i=0;
+  if(tipEl) setInterval(function(){ if(window.__gameReady) return; i=(i+1)%tips.length; tipEl.textContent=tips[i]; },4200);
 })();
 </script>
 <script type="module" src="./src/main.js"></script>

@@ -1,4 +1,5 @@
 import {io} from 'socket.io-client';
+import {friendlyResponse} from '../ui/messages.js';
 
 export class SocketClient {
   constructor({url = import.meta.env?.VITE_SOCKET_URL || '', socketFactory = io} = {}) {
@@ -96,18 +97,18 @@ export class SocketClient {
     if (!this.isConnected() || !this.socket) {
       return Promise.resolve({
         ok: false,
-        error: {code: 'NOT_CONNECTED', message: 'Belum terhubung ke server.'}
+        error: {code: 'NOT_CONNECTED', message: 'Belum tersambung. Tunggu sebentar lalu coba lagi.'}
       });
     }
     return new Promise(resolve => {
       this.socket.timeout(timeoutMs).emit(eventName, payload, (error, response) => {
         if (error) {
-          resolve({ok: false, error: {code: 'TIMEOUT', message: 'Server tidak merespons. Coba lagi.'}});
+          resolve({ok: false, error: {code: 'TIMEOUT', message: 'Koneksi sedang lambat. Coba lagi sebentar lagi.'}});
           return;
         }
         resolve(response && typeof response === 'object'
-          ? response
-          : {ok: false, error: {code: 'INVALID_RESPONSE', message: 'Respons server tidak valid.'}});
+          ? friendlyResponse(response)
+          : {ok: false, error: {code: 'INVALID_RESPONSE', message: 'Terjadi kendala. Coba lagi.'}});
       });
     });
   }

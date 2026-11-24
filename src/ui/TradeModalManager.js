@@ -382,7 +382,7 @@ export class TradeModalManager {
                 giveJailCards: p1JailCard, receiveJailCards: p2JailCard}
             });
             if (!response?.ok) {
-              toast(`Gagal: ${response?.error?.message || 'Penawaran trade gagal dikirim.'}`);
+              toast(`Gagal: ${response?.error?.message || 'Penawaran tukar gagal dikirim.'}`);
               return false;
             }
             if (!clientGameStore.trades.has(response.result?.trade?.tradeId)) {
@@ -433,10 +433,10 @@ export class TradeModalManager {
     const format = amount => `$${Number(amount || 0).toLocaleString('id-ID')}`;
     const statusText = {
       PENDING: 'Menunggu keputusan penerima.',
-      COMPLETED: 'Pertukaran berhasil diselesaikan server.',
+      COMPLETED: 'Pertukaran berhasil!',
       REJECTED: `${receiver.name} menolak penawaran.`,
       CANCELLED: `${sender.name} membatalkan penawaran.`,
-      INVALIDATED: `Penawaran tidak dapat diselesaikan (${trade.reason || 'aset berubah'}).`
+      INVALIDATED: 'Penawaran tidak berlaku lagi karena aset berubah.'
     }[trade.status] || 'Status penawaran tidak diketahui.';
     const controls = trade.status === 'PENDING'
       ? localPlayerId === trade.toPlayerId

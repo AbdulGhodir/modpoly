@@ -51,8 +51,8 @@ export async function requestGameDisplayMode({allowContinue=false}={}){
 
  if(note){
   note.textContent=canFs()
-   ? 'Browser memblokir layar penuh otomatis. Ketuk tombol di bawah satu kali untuk melanjutkan.'
-   : 'Browser ini tidak mendukung layar penuh. Putar HP ke landscape, atau buka dari ikon layar utama untuk menyembunyikan bar browser.';
+   ? 'Browser belum mengizinkan layar penuh otomatis. Ketuk tombol di atas satu kali untuk melanjutkan.'
+   : 'Browser ini belum mendukung layar penuh. Putar HP ke posisi mendatar (landscape) agar papan lebih besar.';
  }
  if(allowContinue){
   gate?.classList.remove('show');

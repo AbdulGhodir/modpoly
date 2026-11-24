@@ -1,4 +1,5 @@
 import {bankruptcyManager} from '../logic/BankruptcyManager.js';
+import {confirmDialog} from './dialog.js';
 import {propertyManager} from '../logic/PropertyManager.js';
 import {toast, buildHud} from './hud.js';
 import {createActionGuard} from '../logic/ActionGuard.js';
@@ -179,9 +180,11 @@ export class BankruptcyModalManager {
         // Handler Nyatakan Bangkrut
         const btnBankrupt = document.getElementById('btn-declare-bankruptcy');
         if (btnBankrupt) {
-          btnBankrupt.onclick = createActionGuard(() => {
-            const confirmMsg = `Yakin ingin menyatakan BANGKRUT?\nSemua aset Anda akan diserahkan kepada ${creditorName} dan Anda keluar dari permainan.`;
-            if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) return false;
+          btnBankrupt.onclick = createActionGuard(async () => {
+            const sure = await confirmDialog({title: 'Menyerah dan bangkrut?', icon: '💥', tone: 'danger',
+              message: `Semua asetmu akan diserahkan kepada ${creditorName} dan kamu keluar dari permainan.`,
+              confirmText: 'Ya, bangkrut', cancelText: 'Jangan dulu'});
+            if (!sure) return false;
 
             bankruptcyManager.declareBankruptcy(debtor.id, creditor ? creditor.id : 'BANK', debtAmount);
             this.close();

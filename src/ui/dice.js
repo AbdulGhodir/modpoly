@@ -109,7 +109,7 @@ export function initDice({client=socketClient,getActiveRoom=()=>null,getLocalPla
       out.textContent='';
     }else if(state.phase==='WAITING_ROLL'){
       out.textContent=state.activePlayerId===getLocalPlayerId()
-        ? 'Klik dadu 🎲'
+        ? 'Lempar dadu 🎲'
         : `Menunggu ${activePlayer?.name || 'pemain aktif'} melempar`;
     }
   };
@@ -126,7 +126,7 @@ export function initDice({client=socketClient,getActiveRoom=()=>null,getLocalPla
       out.textContent=jailed || parking
         ? ''
         : active?.playerId===getLocalPlayerId()
-        ? 'Klik dadu 🎲'
+        ? 'Lempar dadu 🎲'
         : `Menunggu ${active?.name || 'pemain aktif'} melempar`;
     }
   };
@@ -266,8 +266,9 @@ export function initDice({client=socketClient,getActiveRoom=()=>null,getLocalPla
     }
 
     if(busy || !turnManager.canRoll()){
+      // Modal properti sedang diminimalkan: buka kembali langsung (tanpa notifikasi yang menutupi layar).
       if(tileModalManager && tileModalManager.isMinimized()){
-        toast('Buka kembali modal properti di bagian bawah layar untuk melanjutkan!');
+        tileModalManager.restore();
       }
       return;
     }
@@ -349,7 +350,7 @@ export function initDice({client=socketClient,getActiveRoom=()=>null,getLocalPla
       updateMultiplayerControl();
     }else{
       box.classList.remove('disabled');
-      out.textContent='Klik dadu 🎲';
+      out.textContent='Lempar dadu 🎲';
     }
   });
 
@@ -374,7 +375,7 @@ export function initDice({client=socketClient,getActiveRoom=()=>null,getLocalPla
       const active=state.getActivePlayer();
       if(state.phase==='WAITING_ROLL'){
         out.textContent=active?.playerId===getLocalPlayerId()
-          ? 'Klik dadu 🎲'
+          ? 'Lempar dadu 🎲'
           : `Menunggu ${active?.name || 'pemain aktif'} melempar`;
       }
       updateMultiplayerControl();

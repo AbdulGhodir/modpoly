@@ -203,21 +203,8 @@ export class GameScene extends Phaser.Scene{
   this._onPlayerBankrupt=(e)=>{
     const {debtor}=e.detail||{};
     if(!debtor) return;
-    const pIdx=clientGameStore.getPlayerIndex(Number(debtor.id));
-    if(pIdx!==-1 && this.tokens[pIdx]){
-      // Fade out pion lalu sembunyikan
-      this.tweens.add({
-        targets:this.tokens[pIdx],
-        alpha:0,
-        scaleX:0,
-        scaleY:0,
-        duration:600,
-        ease:'Back.easeIn',
-        onComplete:()=>{
-          this.tokens[pIdx].setVisible(false);
-        }
-      });
-    }
+    const pIdx=clientGameStore.getPlayerIndex(debtor.playerId ?? Number(debtor.id));
+    if(pIdx!==-1) this.hideBankruptToken(this.tokens[pIdx]);
   };
   window.addEventListener('player:bankrupt',this._onPlayerBankrupt);
 
@@ -335,6 +322,29 @@ export class GameScene extends Phaser.Scene{
   });
  }
 
+ // Pion pemain yang bangkrut dihilangkan dari papan (dipakai mode lokal dan multiplayer).
+ hideBankruptToken(token){
+  if(!token?.active || token._bankruptHidden) return;
+  token._bankruptHidden=true;
+  token._origScale={x:token.scaleX,y:token.scaleY};
+  token.cancelMotion?.();
+  this.tweens.killTweensOf(token);
+  this.tweens.add({
+   targets:token,alpha:0,scaleX:0,scaleY:0,duration:600,ease:'Back.easeIn',
+   onComplete:()=>{ if(token.active) token.setVisible(false); }
+  });
+ }
+
+ // Pemain yang masih aktif harus terlihat normal (mis. setelah game baru).
+ restoreToken(token){
+  if(!token?._bankruptHidden) return;
+  this.tweens.killTweensOf(token);
+  token._bankruptHidden=false;
+  const scale=token._origScale||{x:1,y:1};
+  token.setScale(scale.x,scale.y);
+  token._origScale=null;
+ }
+
  syncTokensToPlayers(players=clientGameStore.getPlayers()){
   const expectedIds=new Set(players.map(player=>player.playerId));
   const retainedIds=new Set();
@@ -360,9 +370,11 @@ export class GameScene extends Phaser.Scene{
    token.playerSeat=player.seat ?? index;
    const sameTile=players.filter(other=>other.status!==PlayerStatus.BANKRUPT && other.pos===player.pos);
    if(player.status===PlayerStatus.BANKRUPT){
+    if(!token._bankruptHidden){ token._bankruptHidden=true; token._origScale={x:token.scaleX,y:token.scaleY}; }
     token.setVisible(false).setAlpha(0);
     return token;
    }
+   this.restoreToken(token);
    token.setVisible(true).setAlpha(1);
    token.cancelMotion?.();
    this.tweens.killTweensOf(token);
@@ -379,6 +391,12 @@ export class GameScene extends Phaser.Scene{
   const mismatch=boardTokens.length!==players.length || players.some((player,index)=>
    this.tokens[index]?.playerId!==player.playerId);
   if(mismatch) this.syncTokensToPlayers(players);
+  // Status bisa berubah jadi BANGKRUT tanpa event lokal (mis. keputusan resmi dari server di multiplayer).
+  players.forEach((player,index)=>{
+   if(player.status!==PlayerStatus.BANKRUPT) return;
+   const token=this.tokens[index];
+   if(token?.active && token.visible && !token._bankruptHidden) this.hideBankruptToken(token);
+  });
  }
 
  async animateAuthoritativeMovement(movement,generation=this._recoveryGeneration){
@@ -492,13 +510,18 @@ export class GameScene extends Phaser.Scene{
    const targetPos=(currentPos+step)%TILES.length;
    const [hx,hy]=getTileOuterEdge(targetPos,26);
 
-   const numTxt=this.add.text(hx,hy,String(step),{
-    fontFamily:'system-ui, -apple-system, "Segoe UI", Arial, sans-serif',
-    fontSize:'24px',
-    fontWeight:'800',
-    color:'#000000',
+   // Lencana bulat bernomor: menunjukkan berapa langkah ke petak itu (lebih jelas dari angka polos).
+   const badgeBg=this.add.graphics();
+   badgeBg.fillStyle(0x3b2314,0.92).fillCircle(0,0,17);
+   badgeBg.lineStyle(3,0xffffff,1).strokeCircle(0,0,17);
+   const badgeNum=this.add.text(0,0,String(step),{
+    fontFamily:'Fredoka, system-ui, -apple-system, "Segoe UI", Arial, sans-serif',
+    fontSize:'20px',
+    fontStyle:'700',
+    color:'#ffffff',
     resolution:3
    }).setOrigin(0.5);
+   const numTxt=this.add.container(hx,hy,[badgeBg,badgeNum]);
 
    numTxt.setDepth(hy+20);
    numTxt.setScale(0);

@@ -137,11 +137,6 @@ export function animateRentTransfer(fromPlayerId, toPlayerId, amount){
 }
 
 // Handler tombol top action (pengaturan & pause)
-if (typeof document !== 'undefined') {
- document.querySelectorAll('.btn').forEach(b=>{
-  b.onclick=()=>toast(b.dataset.m+' – segera hadir');
- });
-}
 
 // Sync event listener untuk update HUD & floating popup otomatis
 if (typeof window !== 'undefined') {

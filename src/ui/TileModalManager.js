@@ -61,7 +61,6 @@ export class TileModalManager {
     // Tampilkan tombol compact restore di bagian bawah layar
     this._showRestoreButton();
 
-    toast('Modal properti diminimize. Buka kembali melalui tombol di bawah.');
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('tilemodal:minimized'));
     }
@@ -253,7 +252,7 @@ export class TileModalManager {
     const html = `
       <div class="tile-modal-card chance-card">
         <div class="tile-modal-top-bar" style="background:#0f766e">
-          <div class="tile-modal-top-info"><span>HASIL PEMBAYARAN SEWA</span><span class="top-bar-sub">Resolusi resmi permainan online</span></div>
+          <div class="tile-modal-top-info"><span>HASIL PEMBAYARAN SEWA</span><span class="top-bar-sub">Pembayaran selesai</span></div>
           <button type="button" class="btn-tile-minimize" title="Perkecil modal" aria-label="Minimize"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="2.5" y1="8" x2="13.5" y2="8"/></svg></button>
         </div>
         <div class="tile-modal-body text-center chance-modal-body">
@@ -500,7 +499,7 @@ export class TileModalManager {
     if (!result?.auctionId || this.authoritativeAuctionId !== result.auctionId) return false;
     const winner = result.winner;
     const status = winner ? `${escapeHtml(winner.name)} memenangkan ${escapeHtml(result.property?.name)}.` : 'Tidak ada pemain yang menawar. Properti tetap milik Bank.';
-    const html = `<div class="tile-modal-card auction-card finish"><div class="tile-modal-top-bar" style="background:#334155"><div class="tile-modal-top-info"><span>LELANG SELESAI</span><span class="top-bar-sub">Hasil resmi server</span></div></div><div class="tile-modal-body text-center"><div class="finish-icon">${winner ? '🏆' : '🏛️'}</div><h3 class="tile-prop-title">${winner ? 'Lelang dimenangkan' : 'Properti tidak terjual'}</h3><p class="finish-desc">${status}</p>${winner ? `<div class="finish-price-tag">Harga akhir: <b>${formatAuctionMoney(result.amount)}</b></div>` : ''}<div class="tile-details-box">${(result.balances || []).map(item => {
+    const html = `<div class="tile-modal-card auction-card finish"><div class="tile-modal-top-bar" style="background:#334155"><div class="tile-modal-top-info"><span>LELANG SELESAI</span><span class="top-bar-sub">Hasil lelang</span></div></div><div class="tile-modal-body text-center"><div class="finish-icon">${winner ? '🏆' : '🏛️'}</div><h3 class="tile-prop-title">${winner ? 'Lelang dimenangkan' : 'Properti tidak terjual'}</h3><p class="finish-desc">${status}</p>${winner ? `<div class="finish-price-tag">Harga akhir: <b>${formatAuctionMoney(result.amount)}</b></div>` : ''}<div class="tile-details-box">${(result.balances || []).map(item => {
       const player = clientGameStore.getPlayer(item.playerId);
       return `<div class="modal-detail-row"><span>Saldo ${escapeHtml(player?.name || '')}</span><b>${formatAuctionMoney(item.money)}</b></div>`;
     }).join('')}</div></div></div>`;
@@ -918,7 +917,7 @@ export class TileModalManager {
               }
             } else {
               economyManager.deductMoney(player.id, totalCost, card.desc, TransactionType.CARD_PENALTY || TransactionType.CHANCE);
-              toast(`🔨 Membayar biaya renovasi: -$$${totalCost} (${hCount}x Rumah, ${htCount}x Hotel)`);
+              toast(`🔨 Membayar biaya renovasi: -$${totalCost} (${hCount}x Rumah, ${htCount}x Hotel)`);
             }
             buildHud();
             resolve(card);

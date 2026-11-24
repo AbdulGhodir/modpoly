@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import './style.css';
+import './theme.css';
 import {GameScene} from './scenes/GameScene.js';
 import './ui/hud.js';
 import {initDice} from './ui/dice.js';

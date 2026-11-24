@@ -33,7 +33,7 @@ export function initMultiplayerChanceResolution({client, store, modalManager, ge
       turnId: event.turnId, resolutionId: event.resolutionId, presentationId: event.presentationId, actionId
     });
     return response?.ok ? {ok: true} : {ok: false,
-      message: response?.error?.message || 'Server belum dapat melanjutkan kartu.'};
+      message: response?.error?.message || 'Kartu belum bisa dilanjutkan. Coba lagi.'};
   };
   const present = () => {
     const movementInProgress = [...(store.presentation.movements?.values?.() || [])]

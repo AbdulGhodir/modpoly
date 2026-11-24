@@ -56,13 +56,13 @@ export function initBootScreen({client, openLocal} = {}) {
   function renderServerStatus() {
     if (!serverStatus) return;
     const seconds = Math.floor((Date.now() - startedAt) / 1000);
-    serverStatus.textContent = `Menyambungkan ke server… ${seconds} dtk`;
+    serverStatus.textContent = `Menyiapkan mode online… ${seconds} dtk`;
     const elapsed = Date.now() - startedAt;
     if (serverHint) {
       serverHint.textContent = elapsed >= LONG_WAIT_MS
-        ? 'Belum juga tersambung. Periksa koneksi internetmu, atau main lokal dulu sambil menunggu.'
+        ? 'Mode online belum juga siap. Periksa koneksi internetmu, atau main offline dulu sambil menunggu.'
         : elapsed >= HINT_AFTER_MS
-          ? 'Server gratis sedang bangun dari tidur, biasanya butuh 30–60 detik. Tunggu sebentar ya.'
+          ? 'Pertama kali dibuka biasanya butuh 30–60 detik. Kamu bisa langsung main offline sambil menunggu.'
           : '';
     }
   }
@@ -70,7 +70,7 @@ export function initBootScreen({client, openLocal} = {}) {
   function enterServerPhase() {
     phase = 'server';
     startedAt = Date.now();
-    if (caption) caption.textContent = 'Papan siap!';
+    if (caption) caption.textContent = 'Papan sudah siap! 🎉';
     serverBox?.classList.add('show');
     renderServerStatus();
     ticker = setInterval(renderServerStatus, 1000);
